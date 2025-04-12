@@ -102,4 +102,71 @@ def test_data_consistency(setup_pipeline):
         hr_dict = hr.dict()
         assert 'hrvStatus' not in hr_dict
         assert 'bodyBattery' not in hr_dict
-        assert 'pulseOx' not in hr_dict 
+        assert 'pulseOx' not in hr_dict
+
+def test_list_available_files():
+    """Test that we can list files from the garmin_raw directory"""
+    fetcher = GarminDataFetcher()
+    files = fetcher.list_available_files()
+    
+    # Verify we get a list of files
+    assert isinstance(files, list)
+    assert len(files) > 0
+    
+    # Verify we have JSON files
+    json_files = [f for f in files if f.endswith('.json')]
+    assert len(json_files) > 0
+
+def test_fetch_raw_data():
+    """Test that we can fetch and parse JSON data from files"""
+    fetcher = GarminDataFetcher()
+    files = fetcher.list_available_files()
+    
+    # Try to fetch each JSON file
+    for file_path in files:
+        if file_path.endswith('.json'):
+            data = fetcher.fetch_raw_data(file_path)
+            assert isinstance(data, (dict, list)), f"Data from {file_path} should be JSON-parseable"
+
+def test_fetch_all_data():
+    """Test fetching all available data files"""
+    fetcher = GarminDataFetcher()
+    all_data = fetcher.fetch_all_data()
+    
+    # Verify we got data
+    assert len(all_data) > 0, "Should have fetched some data files"
+    
+    # Verify structure of data
+    for file_name, content in all_data.items():
+        assert file_name.endswith('.json'), "Should only have JSON files"
+        assert isinstance(content, (dict, list)), f"Content of {file_name} should be JSON-parseable"
+
+def test_data_structure():
+    """Test that the data structure matches what we expect from Forerunner 235"""
+    fetcher = GarminDataFetcher()
+    all_data = fetcher.fetch_all_data()
+    
+    # Check for expected data types based on forerunner235.md
+    for file_name, content in all_data.items():
+        if 'sleep' in file_name.lower():
+            # Verify sleep data structure
+            if isinstance(content, list):
+                for entry in content:
+                    assert isinstance(entry.get('deepSleepSeconds', 0), (int, type(None)))
+                    assert isinstance(entry.get('lightSleepSeconds', 0), (int, type(None)))
+                    assert isinstance(entry.get('awakeSleepSeconds', 0), (int, type(None)))
+        
+        elif 'activities' in file_name.lower():
+            # Verify activity data structure
+            if isinstance(content, list):
+                for entry in content:
+                    assert 'activityId' in entry, "Activity should have an ID"
+                    assert 'activityName' in entry, "Activity should have a name"
+                    assert 'distance' in entry, "Activity should have distance"
+        
+        elif 'heart-rate' in file_name.lower():
+            # Verify heart rate data structure
+            if isinstance(content, list):
+                for entry in content:
+                    assert 'heartRate' in entry, "Heart rate data should have heart rate value"
+                    assert 'timestamp' in entry, "Heart rate data should have timestamp" 
