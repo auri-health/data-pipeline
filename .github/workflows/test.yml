@@ -25,6 +25,6 @@ jobs:
     
     - name: Run tests with pytest
       env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        GITHUB_TOKEN: ${{ secrets.AURI_PAT }}
       run: |
         pytest tests/ -v --cov=src 
