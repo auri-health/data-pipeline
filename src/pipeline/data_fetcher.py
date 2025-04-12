@@ -20,6 +20,9 @@ class GarminDataFetcher:
         Returns a list of file paths
         """
         response = requests.get(self.api_url, headers=self.headers)
+        print(f"Response status: {response.status_code}")
+        print(f"Response headers: {response.headers}")
+        print(f"Response content: {response.text}")
         response.raise_for_status()
         contents = response.json()
         
