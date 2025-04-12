@@ -1,30 +1,47 @@
 import requests
 from typing import Dict, Any, List
 import json
-from ..config.settings import GARMIN_RAW_DATA_URL
 
 class GarminDataFetcher:
     def __init__(self):
-        self.base_url = "https://raw.githubusercontent.com/auri-health/auri/main/garmin_raw"
+        # Base URL for raw content
+        self.base_url = "https://raw.githubusercontent.com/auri-health/auri/main"
+        # API URL for repository contents
+        self.api_url = "https://api.github.com/repos/auri-health/auri/contents"
 
     def list_available_files(self) -> List[str]:
         """
-        List available data files in the garmin_raw directory
+        List available Garmin data files in the repository
         Returns a list of file paths
         """
-        # For now, we'll use the GitHub API to list files
-        api_url = "https://api.github.com/repos/auri-health/auri/contents/garmin_raw"
-        response = requests.get(api_url)
+        # First, try to find the garmin data directory
+        response = requests.get(f"{self.api_url}")
         response.raise_for_status()
-        files = response.json()
-        return [file['name'] for file in files if file['type'] == 'file']
+        contents = response.json()
+        
+        # Look for garmin-related files and directories
+        garmin_files = []
+        for item in contents:
+            if 'garmin' in item['name'].lower():
+                if item['type'] == 'file' and item['name'].endswith('.json'):
+                    garmin_files.append(item['name'])
+                elif item['type'] == 'dir':
+                    # If it's a directory, check its contents
+                    dir_response = requests.get(item['url'])
+                    dir_response.raise_for_status()
+                    dir_contents = dir_response.json()
+                    for file in dir_contents:
+                        if file['type'] == 'file' and file['name'].endswith('.json'):
+                            garmin_files.append(f"{item['name']}/{file['name']}")
+        
+        return garmin_files
 
     def fetch_raw_data(self, file_path: str) -> Dict[str, Any]:
         """
         Fetch raw JSON data from GitHub
         
         Args:
-            file_path: Name of the JSON file in the garmin_raw directory
+            file_path: Path to the JSON file in the repository
             
         Returns:
             Dict containing the JSON data
@@ -36,28 +53,39 @@ class GarminDataFetcher:
 
     def fetch_all_data(self) -> Dict[str, List[Dict[str, Any]]]:
         """
-        Fetch all available data files
+        Fetch all available Garmin data files
         
         Returns:
             Dict with file names as keys and their contents as values
         """
         all_data = {}
         for file_path in self.list_available_files():
-            if file_path.endswith('.json'):
-                try:
-                    all_data[file_path] = self.fetch_raw_data(file_path)
-                except requests.RequestException as e:
-                    print(f"Error fetching {file_path}: {e}")
+            try:
+                all_data[file_path] = self.fetch_raw_data(file_path)
+            except requests.RequestException as e:
+                print(f"Error fetching {file_path}: {e}")
         return all_data
 
     def fetch_sleep_data(self) -> List[Dict[str, Any]]:
         """Fetch sleep data files"""
-        return self.fetch_raw_data("sleep-data.json")
+        files = self.list_available_files()
+        sleep_files = [f for f in files if 'sleep' in f.lower()]
+        if not sleep_files:
+            raise FileNotFoundError("No sleep data files found")
+        return self.fetch_raw_data(sleep_files[0])
 
     def fetch_activity_data(self) -> List[Dict[str, Any]]:
         """Fetch activity data files"""
-        return self.fetch_raw_data("activities-data.json")
+        files = self.list_available_files()
+        activity_files = [f for f in files if 'activit' in f.lower()]
+        if not activity_files:
+            raise FileNotFoundError("No activity data files found")
+        return self.fetch_raw_data(activity_files[0])
 
     def fetch_heart_rate_data(self) -> List[Dict[str, Any]]:
         """Fetch heart rate data files"""
-        return self.fetch_raw_data("heart-rate-data.json") 
+        files = self.list_available_files()
+        hr_files = [f for f in files if 'heart' in f.lower() or 'hr' in f.lower()]
+        if not hr_files:
+            raise FileNotFoundError("No heart rate data files found")
+        return self.fetch_raw_data(hr_files[0]) 
