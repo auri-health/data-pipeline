@@ -10,9 +10,12 @@ class GarminDataFetcher:
         # API URL for repository contents
         self.api_url = "https://api.github.com/repos/auri-health/auri/contents/garmin_raw"
         # Get GitHub token from environment
-        self.headers = {}
+        self.headers = {
+            'Accept': 'application/vnd.github+json',
+            'X-GitHub-Api-Version': '2022-11-28'
+        }
         if github_token := os.getenv('GITHUB_TOKEN'):
-            self.headers['Authorization'] = f'token {github_token}'
+            self.headers['Authorization'] = f'Bearer {github_token}'
 
     def list_available_files(self) -> List[str]:
         """
