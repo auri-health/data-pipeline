@@ -6,9 +6,9 @@ import os
 class GarminDataFetcher:
     def __init__(self):
         # Base URL for raw content
-        self.base_url = "https://raw.githubusercontent.com/auri-health/auri/main"
+        self.base_url = "https://raw.githubusercontent.com/auri-health/auri/main/garmin_raw"
         # API URL for repository contents
-        self.api_url = "https://api.github.com/repos/auri-health/auri/contents"
+        self.api_url = "https://api.github.com/repos/auri-health/auri/contents/garmin_raw"
         # Get GitHub token from environment
         self.headers = {}
         if github_token := os.getenv('GITHUB_TOKEN'):
@@ -19,25 +19,15 @@ class GarminDataFetcher:
         List available Garmin data files in the repository
         Returns a list of file paths
         """
-        # First, try to find the garmin data directory
-        response = requests.get(f"{self.api_url}", headers=self.headers)
+        response = requests.get(self.api_url, headers=self.headers)
         response.raise_for_status()
         contents = response.json()
         
-        # Look for garmin-related files and directories
+        # Look for JSON files
         garmin_files = []
         for item in contents:
-            if 'garmin' in item['name'].lower():
-                if item['type'] == 'file' and item['name'].endswith('.json'):
-                    garmin_files.append(item['name'])
-                elif item['type'] == 'dir':
-                    # If it's a directory, check its contents
-                    dir_response = requests.get(item['url'], headers=self.headers)
-                    dir_response.raise_for_status()
-                    dir_contents = dir_response.json()
-                    for file in dir_contents:
-                        if file['type'] == 'file' and file['name'].endswith('.json'):
-                            garmin_files.append(f"{item['name']}/{file['name']}")
+            if item['type'] == 'file' and item['name'].endswith('.json'):
+                garmin_files.append(item['name'])
         
         return garmin_files
 
