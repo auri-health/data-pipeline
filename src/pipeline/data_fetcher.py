@@ -1,6 +1,7 @@
 import requests
 from typing import Dict, Any, List
 import json
+import os
 
 class GarminDataFetcher:
     def __init__(self):
@@ -8,6 +9,10 @@ class GarminDataFetcher:
         self.base_url = "https://raw.githubusercontent.com/auri-health/auri/main"
         # API URL for repository contents
         self.api_url = "https://api.github.com/repos/auri-health/auri/contents"
+        # Get GitHub token from environment
+        self.headers = {}
+        if github_token := os.getenv('GITHUB_TOKEN'):
+            self.headers['Authorization'] = f'token {github_token}'
 
     def list_available_files(self) -> List[str]:
         """
@@ -15,7 +20,7 @@ class GarminDataFetcher:
         Returns a list of file paths
         """
         # First, try to find the garmin data directory
-        response = requests.get(f"{self.api_url}")
+        response = requests.get(f"{self.api_url}", headers=self.headers)
         response.raise_for_status()
         contents = response.json()
         
@@ -27,7 +32,7 @@ class GarminDataFetcher:
                     garmin_files.append(item['name'])
                 elif item['type'] == 'dir':
                     # If it's a directory, check its contents
-                    dir_response = requests.get(item['url'])
+                    dir_response = requests.get(item['url'], headers=self.headers)
                     dir_response.raise_for_status()
                     dir_contents = dir_response.json()
                     for file in dir_contents:
@@ -47,7 +52,7 @@ class GarminDataFetcher:
             Dict containing the JSON data
         """
         url = f"{self.base_url}/{file_path}"
-        response = requests.get(url)
+        response = requests.get(url, headers=self.headers)
         response.raise_for_status()
         return response.json()
 

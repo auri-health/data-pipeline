@@ -28,5 +28,7 @@ jobs:
         pip install -r requirements-dev.txt
     
     - name: Run tests with pytest
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
         pytest tests/ -v --cov=src 
