@@ -28,5 +28,9 @@ jobs:
         pip install -r requirements-dev.txt
     
     - name: Run tests with pytest
+      env:
+        TESTING: "true"
+        SUPABASE_URL: "https://mock-url-for-testing.supabase.co"
+        SUPABASE_KEY: "mock-key-for-testing"
       run: |
         pytest tests/ -v --cov=src 
