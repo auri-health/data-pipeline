@@ -4,7 +4,13 @@ import json
 import os
 
 class GarminDataFetcher:
-    def __init__(self):
+    """Fetches Garmin data from GitHub repository.
+    
+    Authentication is handled via a Personal Access Token (PAT) with repo scope,
+    which allows access to private repository contents.
+    """
+    
+    def __init__(self, github_token=None):
         # Base URL for raw content
         self.base_url = "https://raw.githubusercontent.com/auri-health/auri/main/garmin_raw"
         # API URL for repository contents
@@ -14,7 +20,7 @@ class GarminDataFetcher:
             'Accept': 'application/vnd.github+json',
             'X-GitHub-Api-Version': '2022-11-28'
         }
-        if github_token := os.getenv('GITHUB_TOKEN'):
+        if github_token:
             self.headers['Authorization'] = f'Bearer {github_token}'
 
     def list_available_files(self) -> List[str]:
