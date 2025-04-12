@@ -6,9 +6,9 @@ import os
 class GarminDataFetcher:
     def __init__(self):
         # Base URL for raw content
-        self.base_url = "https://raw.githubusercontent.com/auri-health/data-pipeline/main"
+        self.base_url = "https://raw.githubusercontent.com/auri-health/auri/main"
         # API URL for repository contents
-        self.api_url = "https://api.github.com/repos/auri-health/data-pipeline/contents"
+        self.api_url = "https://api.github.com/repos/auri-health/auri/contents"
         # Get GitHub token from environment
         self.headers = {}
         if github_token := os.getenv('GITHUB_TOKEN'):
