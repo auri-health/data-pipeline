@@ -178,22 +178,31 @@ async function processHeartRates(userId: string, fileContent: any) {
 }
 
 async function processSleep(userId: string, fileContent: GarminSleep) {
+  console.log('Processing sleep data:', JSON.stringify(fileContent, null, 2))
+
   // Handle timestamp conversion
   let startTime: Date
   try {
-    if (typeof fileContent.startTimeGMT === 'number') {
-      startTime = new Date(fileContent.startTimeGMT)
+    // Try different possible timestamp fields
+    const timestamp = fileContent.startTimeGMT || fileContent.startTime || fileContent.startTimeLocal
+    if (!timestamp) {
+      console.error('No timestamp found in sleep data. Available fields:', Object.keys(fileContent))
+      throw new Error('No timestamp found in sleep data')
+    }
+
+    if (typeof timestamp === 'number') {
+      startTime = new Date(timestamp)
     } else {
-      startTime = new Date(fileContent.startTimeGMT)
+      startTime = new Date(timestamp)
     }
     
     // Validate the timestamp
     if (isNaN(startTime.getTime())) {
-      throw new Error(`Invalid timestamp: ${fileContent.startTimeGMT}`)
+      throw new Error(`Invalid timestamp: ${timestamp}`)
     }
   } catch (error) {
     console.error('Error parsing timestamp:', error)
-    console.error('Raw startTimeGMT:', fileContent.startTimeGMT)
+    console.error('Raw sleep data:', fileContent)
     throw error
   }
 
