@@ -178,8 +178,26 @@ async function processHeartRates(userId: string, fileContent: any) {
 }
 
 async function processSleep(userId: string, fileContent: GarminSleep) {
-  const sleepId = `${userId}_${new Date(fileContent.startTimeGMT).getTime()}`
-  const startTime = new Date(fileContent.startTimeGMT)
+  // Handle timestamp conversion
+  let startTime: Date
+  try {
+    if (typeof fileContent.startTimeGMT === 'number') {
+      startTime = new Date(fileContent.startTimeGMT)
+    } else {
+      startTime = new Date(fileContent.startTimeGMT)
+    }
+    
+    // Validate the timestamp
+    if (isNaN(startTime.getTime())) {
+      throw new Error(`Invalid timestamp: ${fileContent.startTimeGMT}`)
+    }
+  } catch (error) {
+    console.error('Error parsing timestamp:', error)
+    console.error('Raw startTimeGMT:', fileContent.startTimeGMT)
+    throw error
+  }
+
+  const sleepId = `${userId}_${startTime.getTime()}`
 
   // Process sleep stages
   const stages = [
@@ -192,7 +210,7 @@ async function processSleep(userId: string, fileContent: GarminSleep) {
   const sleepStages = stages.map(({ stage, duration }) => ({
     user_id: userId,
     device_id: fileContent.deviceId || 'unknown',
-    source: 'GARMIN',
+    source: 'garmin',
     sleep_id: sleepId,
     timestamp: startTime.toISOString(),
     stage,
@@ -218,7 +236,7 @@ async function processSleep(userId: string, fileContent: GarminSleep) {
     const sleepMovement = {
       user_id: userId,
       device_id: fileContent.deviceId || 'unknown',
-      source: 'GARMIN',
+      source: 'garmin',
       sleep_id: sleepId,
       timestamp: startTime.toISOString(),
       movement_value: Math.round(fileContent.sleepMovement * 100),
@@ -239,7 +257,7 @@ async function processSleep(userId: string, fileContent: GarminSleep) {
     }
   }
 
-  console.log(`Imported sleep data for ${fileContent.startTimeGMT}`)
+  console.log(`Imported sleep data for ${startTime.toISOString()}`)
 }
 
 async function processFile(userId: string, bucketName: string, filePath: string) {
