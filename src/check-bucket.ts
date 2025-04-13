@@ -178,13 +178,21 @@ async function processHeartRates(userId: string, fileContent: any) {
 }
 
 async function processSleep(userId: string, fileContent: GarminSleep) {
-  console.log('Processing sleep data:', JSON.stringify(fileContent, null, 2))
+  console.log('Sleep data structure:')
+  console.log('Available fields:', Object.keys(fileContent))
+  console.log('Full sleep data:', JSON.stringify(fileContent, null, 2))
+  console.log('Date fields:')
+  for (const key of Object.keys(fileContent)) {
+    if (key.toLowerCase().includes('time') || key.toLowerCase().includes('date')) {
+      console.log(`- ${key}:`, fileContent[key])
+    }
+  }
 
   // Handle timestamp conversion
   let startTime: Date
   try {
     // Try different possible timestamp fields
-    const timestamp = fileContent.startTimeGMT || fileContent.startTime || fileContent.startTimeLocal
+    const timestamp = fileContent.startTimeGMT || fileContent.startTime || fileContent.startTimeLocal || fileContent.calendarDate
     if (!timestamp) {
       console.error('No timestamp found in sleep data. Available fields:', Object.keys(fileContent))
       throw new Error('No timestamp found in sleep data')
@@ -192,14 +200,20 @@ async function processSleep(userId: string, fileContent: GarminSleep) {
 
     if (typeof timestamp === 'number') {
       startTime = new Date(timestamp)
-    } else {
+    } else if (timestamp.includes('T')) {
+      // If it's an ISO string
       startTime = new Date(timestamp)
+    } else {
+      // If it's just a date string, assume start of day
+      startTime = new Date(timestamp + 'T00:00:00Z')
     }
     
     // Validate the timestamp
     if (isNaN(startTime.getTime())) {
       throw new Error(`Invalid timestamp: ${timestamp}`)
     }
+
+    console.log('Parsed timestamp:', startTime.toISOString())
   } catch (error) {
     console.error('Error parsing timestamp:', error)
     console.error('Raw sleep data:', fileContent)
