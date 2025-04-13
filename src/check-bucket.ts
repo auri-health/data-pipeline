@@ -218,7 +218,10 @@ async function processFile(userId: string, bucketName: string, filePath: string)
       throw error
     }
 
-    const content = JSON.parse(await data.text())
+    const rawContent = await data.text()
+    console.log(`Raw file content for ${filePath}:`, rawContent)
+    
+    const content = JSON.parse(rawContent)
 
     if (filePath.includes('activities-')) {
       await processActivities(userId, content)
