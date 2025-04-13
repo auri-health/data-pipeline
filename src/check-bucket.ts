@@ -359,10 +359,13 @@ async function processFile(userId: string, bucketName: string, filePath: string)
 async function checkBucketFiles() {
   const userId = '7afb527e-a12f-4c78-8dda-bd4e7ae501b1'
   const bucketName = 'garmin-data'
-  const testDate = '2025-04-07'
+  
+  // Get today's date in YYYY-MM-DD format
+  const today = new Date()
+  const todayStr = today.toISOString().split('T')[0]
   
   try {
-    console.log(`Checking bucket "${bucketName}" for user "${userId}"...`)
+    console.log(`Checking bucket "${bucketName}" for user "${userId}" for date ${todayStr}...`)
     
     const { data, error } = await supabase.storage
       .from(bucketName)
@@ -385,16 +388,17 @@ async function checkBucketFiles() {
       return
     }
 
-    // Filter files for just one day
-    const testFiles = data.filter(file => file.name.includes(testDate))
-    console.log(`Found ${testFiles.length} files for ${testDate}:`)
+    // Filter files for today's data
+    const todayFiles = data.filter(file => file.name.includes(todayStr))
+    console.log(`Found ${todayFiles.length} files for today (${todayStr}):`)
+    todayFiles.forEach(file => console.log(`- ${file.name}`))
     
-    for (const file of testFiles) {
-      console.log(`Processing ${file.name}...`)
+    for (const file of todayFiles) {
+      console.log(`\nProcessing ${file.name}...`)
       await processFile(userId, bucketName, `${userId}/${file.name}`)
     }
 
-    console.log('All test files processed successfully')
+    console.log('\nAll files for today processed successfully')
   } catch (err: any) {
     console.error('Error processing bucket:', err)
     if (err.message) console.error('Error message:', err.message)
