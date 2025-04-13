@@ -134,16 +134,32 @@ async function processHeartRates(userId: string, fileContent: any) {
   // Sample the first item to understand the structure
   console.log('Sample heart rate reading:', JSON.stringify(heartRateData[0], null, 2))
 
-  const heartRates = heartRateData.map(hr => ({
-    user_id: userId,
-    device_id: hr.deviceId || fileContent.deviceId || 'unknown',
-    source: 'GARMIN',
-    timestamp: new Date(hr.timestamp || hr.time || hr.date).toISOString(),
-    heart_rate: hr.heartRate || hr.value || hr.bpm,
-    reading_type: 'CONTINUOUS',
-    extracted_at: new Date().toISOString(),
-    created_at: new Date().toISOString()
-  }))
+  const heartRates = heartRateData.map(hr => {
+    // Handle timestamp conversion
+    let timestamp: string
+    const rawTimestamp = hr.timestamp || hr.time || hr.date
+    
+    if (typeof rawTimestamp === 'number') {
+      // If timestamp is a number, assume it's milliseconds since epoch
+      timestamp = new Date(rawTimestamp).toISOString()
+    } else if (typeof rawTimestamp === 'string') {
+      // If timestamp is a string, try to parse it
+      timestamp = new Date(rawTimestamp).toISOString()
+    } else {
+      throw new Error(`Invalid timestamp format: ${typeof rawTimestamp}`)
+    }
+
+    return {
+      user_id: userId,
+      device_id: hr.deviceId || fileContent.deviceId || 'unknown',
+      source: 'GARMIN',
+      timestamp,
+      heart_rate: hr.heartRate || hr.value || hr.bpm,
+      reading_type: 'CONTINUOUS',
+      extracted_at: new Date().toISOString(),
+      created_at: new Date().toISOString()
+    }
+  })
 
   const { error } = await supabase
     .from('heart_rate_readings')
