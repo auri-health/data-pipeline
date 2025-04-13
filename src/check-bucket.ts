@@ -140,7 +140,7 @@ async function processHeartRates(userId: string, fileContent: any) {
       return {
         user_id: userId,
         device_id: fileContent.deviceId || 'unknown',
-        source: 'GARMIN',
+        data_source: 'garmin',
         timestamp: new Date(hr[0]).toISOString(),
         heart_rate: hr[1],
         reading_type: 'CONTINUOUS',
@@ -153,7 +153,7 @@ async function processHeartRates(userId: string, fileContent: any) {
     return {
       user_id: userId,
       device_id: hr.deviceId || fileContent.deviceId || 'unknown',
-      source: 'GARMIN',
+      data_source: 'garmin',
       timestamp: new Date(hr.timestamp || hr.time || hr.date).toISOString(),
       heart_rate: hr.heartRate || hr.value || hr.bpm,
       reading_type: 'CONTINUOUS',
