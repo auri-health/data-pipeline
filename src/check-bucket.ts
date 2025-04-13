@@ -300,6 +300,7 @@ async function processFile(userId: string, bucketName: string, filePath: string)
 async function checkBucketFiles() {
   const userId = '7afb527e-a12f-4c78-8dda-bd4e7ae501b1'
   const bucketName = 'garmin-data'
+  const testDate = '2025-04-07'
   
   try {
     console.log(`Checking bucket "${bucketName}" for user "${userId}"...`)
@@ -325,13 +326,16 @@ async function checkBucketFiles() {
       return
     }
 
-    console.log(`Found ${data.length} files:`)
-    for (const file of data) {
+    // Filter files for just one day
+    const testFiles = data.filter(file => file.name.includes(testDate))
+    console.log(`Found ${testFiles.length} files for ${testDate}:`)
+    
+    for (const file of testFiles) {
       console.log(`Processing ${file.name}...`)
       await processFile(userId, bucketName, `${userId}/${file.name}`)
     }
 
-    console.log('All files processed successfully')
+    console.log('All test files processed successfully')
   } catch (err: any) {
     console.error('Error processing bucket:', err)
     if (err.message) console.error('Error message:', err.message)
