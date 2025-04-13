@@ -1,0 +1,19 @@
+{
+  "name": "data-pipeline",
+  "version": "1.0.0",
+  "description": "Garmin data pipeline for Supabase",
+  "main": "dist/check-bucket.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/check-bucket.js",
+    "check": "ts-node src/check-bucket.ts"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.39.7"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.24",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.3.3"
+  }
+} 
