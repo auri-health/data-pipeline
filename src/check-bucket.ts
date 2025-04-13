@@ -101,10 +101,20 @@ async function processActivities(userId: string, fileContent: GarminActivity[]) 
   console.log(`Imported ${activities.length} activities`)
 }
 
-async function processHeartRates(userId: string, fileContent: GarminHeartRate[]) {
-  const heartRates = fileContent.map(hr => ({
+async function processHeartRates(userId: string, fileContent: any) {
+  console.log('Heart rate data structure:', JSON.stringify(fileContent, null, 2))
+  
+  // Handle both array and object formats
+  const heartRateData = Array.isArray(fileContent) ? fileContent : fileContent.heartRateValues || []
+  
+  if (!Array.isArray(heartRateData)) {
+    console.error('Unexpected heart rate data structure:', typeof heartRateData)
+    return
+  }
+
+  const heartRates = heartRateData.map(hr => ({
     user_id: userId,
-    device_id: hr.deviceId,
+    device_id: hr.deviceId || fileContent.deviceId || 'unknown',
     source: 'GARMIN',
     timestamp: new Date(hr.timestamp).toISOString(),
     heart_rate: hr.heartRate,
@@ -112,6 +122,11 @@ async function processHeartRates(userId: string, fileContent: GarminHeartRate[])
     extracted_at: new Date().toISOString(),
     created_at: new Date().toISOString()
   }))
+
+  if (heartRates.length === 0) {
+    console.log('No heart rate readings to import')
+    return
+  }
 
   const { error } = await supabase
     .from('heart_rate_readings')
