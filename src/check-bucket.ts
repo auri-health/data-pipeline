@@ -294,17 +294,28 @@ async function processFile(userId: string, bucketName: string, filePath: string)
     }
 
     const rawContent = await data.text()
-    console.log(`Raw file content for ${filePath}:`, rawContent)
+    console.log('----------------------------------------')
+    console.log(`Raw file content for ${filePath}:`)
+    console.log(rawContent)
+    console.log('----------------------------------------')
     
-    const content = JSON.parse(rawContent)
-    console.log('Parsed content:', JSON.stringify(content, null, 2))
+    try {
+      const content = JSON.parse(rawContent)
+      console.log('Parsed JSON content:')
+      console.log(JSON.stringify(content, null, 2))
+      console.log('----------------------------------------')
 
-    if (filePath.includes('activities-')) {
-      await processActivities(userId, content)
-    } else if (filePath.includes('heart-rate-')) {
-      await processHeartRates(userId, content)
-    } else if (filePath.includes('sleep-')) {
-      await processSleep(userId, content)
+      if (filePath.includes('activities-')) {
+        await processActivities(userId, content)
+      } else if (filePath.includes('heart-rate-')) {
+        await processHeartRates(userId, content)
+      } else if (filePath.includes('sleep-')) {
+        await processSleep(userId, content)
+      }
+    } catch (parseError) {
+      console.error('Error parsing JSON:', parseError)
+      console.error('Raw content that failed to parse:', rawContent)
+      throw parseError
     }
   } catch (error) {
     console.error(`Error processing file ${filePath}:`, error)
