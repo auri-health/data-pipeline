@@ -283,6 +283,7 @@ async function processFile(userId: string, bucketName: string, filePath: string)
     console.log(`Raw file content for ${filePath}:`, rawContent)
     
     const content = JSON.parse(rawContent)
+    console.log('Parsed content:', JSON.stringify(content, null, 2))
 
     if (filePath.includes('activities-')) {
       await processActivities(userId, content)
