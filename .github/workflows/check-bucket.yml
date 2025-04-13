@@ -3,7 +3,7 @@ name: Check Supabase Bucket
 on:
   workflow_dispatch:  # Manual trigger
   schedule:
-    - cron: '0 0 * * *'  # Run daily at midnight UTC
+    - cron: '15 10,18,2 * * *'  # Run at 10:15am, 6:15pm, and 2:15am UTC
 
 jobs:
   check-bucket:
