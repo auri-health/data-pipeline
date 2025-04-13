@@ -48,6 +48,13 @@ interface GarminHeartRate {
   deviceId: string
 }
 
+interface GarminSteps {
+  startTimeGMT: string
+  steps: number
+  deviceId?: string
+  [key: string]: any
+}
+
 async function processActivities(userId: string, fileContent: GarminActivity[]) {
   const activities = fileContent.map(activity => ({
     user_id: userId,
@@ -302,6 +309,90 @@ async function processSleep(userId: string, fileContent: any) {
   }
 }
 
+async function processSteps(userId: string, fileContent: any) {
+  console.log('Processing steps data...')
+  
+  // Try different possible structures
+  let stepsData: any[] = []
+  
+  if (Array.isArray(fileContent)) {
+    console.log('Steps data is an array')
+    stepsData = fileContent
+  } else if (fileContent.stepsValues) {
+    console.log('Steps data is in stepsValues')
+    stepsData = fileContent.stepsValues
+  } else if (fileContent.data && Array.isArray(fileContent.data)) {
+    console.log('Steps data is in data array')
+    stepsData = fileContent.data
+  } else {
+    console.error('Could not find steps data in expected formats:', Object.keys(fileContent))
+    return
+  }
+
+  console.log(`Found ${stepsData.length} steps readings`)
+
+  if (stepsData.length === 0) {
+    console.log('No steps readings to import')
+    return
+  }
+
+  // Sample the first item to understand the structure
+  console.log('Sample steps reading:', JSON.stringify(stepsData[0], null, 2))
+
+  const stepsReadings = stepsData.map(reading => {
+    // Handle array format [timestamp, value]
+    if (Array.isArray(reading)) {
+      return {
+        user_id: userId,
+        device_id: fileContent.deviceId || 'unknown',
+        source: 'garmin',
+        timestamp: new Date(reading[0]).toISOString(),
+        steps: reading[1],
+        extracted_at: new Date().toISOString(),
+        created_at: new Date().toISOString()
+      }
+    }
+    
+    // Handle object format
+    const timestamp = reading.startTimeGMT || reading.timestamp || reading.time || reading.date
+    const steps = reading.steps || reading.value || reading.count
+
+    if (!timestamp || typeof steps !== 'number') {
+      console.warn('Invalid steps reading:', reading)
+      return null
+    }
+
+    return {
+      user_id: userId,
+      device_id: reading.deviceId || fileContent.deviceId || 'unknown',
+      source: 'garmin',
+      timestamp: new Date(timestamp).toISOString(),
+      steps: steps,
+      extracted_at: new Date().toISOString(),
+      created_at: new Date().toISOString()
+    }
+  }).filter(reading => reading !== null && !isNaN(reading.steps))
+
+  if (stepsReadings.length === 0) {
+    console.log('No valid steps readings to import')
+    return
+  }
+
+  const { error } = await supabase
+    .from('step_readings')
+    .upsert(stepsReadings, {
+      onConflict: 'user_id,timestamp',
+      ignoreDuplicates: true
+    })
+
+  if (error) {
+    console.error('Error inserting steps:', error)
+    throw error
+  }
+
+  console.log(`Imported ${stepsReadings.length} steps readings`)
+}
+
 async function processFile(userId: string, bucketName: string, filePath: string) {
   try {
     console.log(`\n=== Starting to process file: ${filePath} ===`)
@@ -340,6 +431,9 @@ async function processFile(userId: string, bucketName: string, filePath: string)
       } else if (filePath.includes('sleep-')) {
         console.log('\nProcessing as sleep file...')
         await processSleep(userId, content)
+      } else if (filePath.includes('steps-')) {
+        console.log('\nProcessing as steps file...')
+        await processSteps(userId, content)
       } else {
         console.warn('Unknown file type, skipping:', filePath)
       }
