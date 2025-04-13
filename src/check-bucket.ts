@@ -285,40 +285,54 @@ async function processSleep(userId: string, fileContent: GarminSleep) {
 
 async function processFile(userId: string, bucketName: string, filePath: string) {
   try {
+    console.log(`\n=== Starting to process file: ${filePath} ===`)
+    
     const { data, error } = await supabase.storage
       .from(bucketName)
       .download(filePath)
 
     if (error) {
+      console.error('Error downloading file:', error)
       throw error
     }
 
     const rawContent = await data.text()
-    console.log('----------------------------------------')
-    console.log(`Raw file content for ${filePath}:`)
+    if (!rawContent || rawContent.trim() === '') {
+      console.warn('File is empty!')
+      return
+    }
+
+    console.log('\n=== Raw file content ===')
     console.log(rawContent)
-    console.log('----------------------------------------')
+    console.log('\n=== End raw file content ===')
     
     try {
       const content = JSON.parse(rawContent)
-      console.log('Parsed JSON content:')
+      console.log('\n=== Parsed JSON content ===')
       console.log(JSON.stringify(content, null, 2))
-      console.log('----------------------------------------')
+      console.log('\n=== End parsed JSON content ===')
 
       if (filePath.includes('activities-')) {
+        console.log('\nProcessing as activities file...')
         await processActivities(userId, content)
       } else if (filePath.includes('heart-rate-')) {
+        console.log('\nProcessing as heart rate file...')
         await processHeartRates(userId, content)
       } else if (filePath.includes('sleep-')) {
+        console.log('\nProcessing as sleep file...')
         await processSleep(userId, content)
+      } else {
+        console.warn('Unknown file type, skipping:', filePath)
       }
     } catch (parseError) {
-      console.error('Error parsing JSON:', parseError)
-      console.error('Raw content that failed to parse:', rawContent)
+      console.error('\nError parsing JSON:')
+      console.error(parseError)
+      console.error('\nRaw content that failed to parse:')
+      console.error(rawContent)
       throw parseError
     }
   } catch (error) {
-    console.error(`Error processing file ${filePath}:`, error)
+    console.error(`\nError processing file ${filePath}:`, error)
     throw error
   }
 }
