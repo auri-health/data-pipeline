@@ -102,31 +102,48 @@ async function processActivities(userId: string, fileContent: GarminActivity[]) 
 }
 
 async function processHeartRates(userId: string, fileContent: any) {
-  console.log('Heart rate data structure:', JSON.stringify(fileContent, null, 2))
+  console.log('Processing heart rate data...')
   
-  // Handle both array and object formats
-  const heartRateData = Array.isArray(fileContent) ? fileContent : fileContent.heartRateValues || []
+  // Try different possible structures
+  let heartRateData: any[] = []
   
-  if (!Array.isArray(heartRateData)) {
-    console.error('Unexpected heart rate data structure:', typeof heartRateData)
+  if (Array.isArray(fileContent)) {
+    console.log('Heart rate data is an array')
+    heartRateData = fileContent
+  } else if (fileContent.heartRateValues) {
+    console.log('Heart rate data is in heartRateValues')
+    heartRateData = fileContent.heartRateValues
+  } else if (fileContent.data && Array.isArray(fileContent.data)) {
+    console.log('Heart rate data is in data array')
+    heartRateData = fileContent.data
+  } else if (fileContent.readings && Array.isArray(fileContent.readings)) {
+    console.log('Heart rate data is in readings array')
+    heartRateData = fileContent.readings
+  } else {
+    console.error('Could not find heart rate data in expected formats:', Object.keys(fileContent))
     return
   }
+
+  console.log(`Found ${heartRateData.length} heart rate readings`)
+
+  if (heartRateData.length === 0) {
+    console.log('No heart rate readings to import')
+    return
+  }
+
+  // Sample the first item to understand the structure
+  console.log('Sample heart rate reading:', JSON.stringify(heartRateData[0], null, 2))
 
   const heartRates = heartRateData.map(hr => ({
     user_id: userId,
     device_id: hr.deviceId || fileContent.deviceId || 'unknown',
     source: 'GARMIN',
-    timestamp: new Date(hr.timestamp).toISOString(),
-    heart_rate: hr.heartRate,
+    timestamp: new Date(hr.timestamp || hr.time || hr.date).toISOString(),
+    heart_rate: hr.heartRate || hr.value || hr.bpm,
     reading_type: 'CONTINUOUS',
     extracted_at: new Date().toISOString(),
     created_at: new Date().toISOString()
   }))
-
-  if (heartRates.length === 0) {
-    console.log('No heart rate readings to import')
-    return
-  }
 
   const { error } = await supabase
     .from('heart_rate_readings')
