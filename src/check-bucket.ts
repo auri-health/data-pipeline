@@ -177,110 +177,129 @@ async function processHeartRates(userId: string, fileContent: any) {
   console.log(`Imported ${heartRates.length} heart rate readings`)
 }
 
-async function processSleep(userId: string, fileContent: GarminSleep) {
+async function processSleep(userId: string, fileContent: any) {
   console.log('Sleep data structure:')
   console.log('Available fields:', Object.keys(fileContent))
   console.log('Full sleep data:', JSON.stringify(fileContent, null, 2))
-  console.log('Date fields:')
-  for (const key of Object.keys(fileContent)) {
-    if (key.toLowerCase().includes('time') || key.toLowerCase().includes('date')) {
-      console.log(`- ${key}:`, fileContent[key])
+
+  // Handle array of sleep records
+  let sleepRecords = Array.isArray(fileContent) ? fileContent : [fileContent]
+  console.log(`Found ${sleepRecords.length} sleep records`)
+
+  for (const record of sleepRecords) {
+    console.log('\nProcessing sleep record:', JSON.stringify(record, null, 2))
+    console.log('Date fields in record:')
+    const dateFields = Object.entries(record)
+      .filter(([key, value]) => 
+        key.toLowerCase().includes('time') || 
+        key.toLowerCase().includes('date') ||
+        (typeof value === 'string' && value.includes('T'))
+      )
+    console.log(dateFields)
+
+    // Handle timestamp conversion
+    let startTime: Date
+    try {
+      // Try different possible timestamp fields
+      const timestampField = dateFields.find(([_, value]) => value !== null)?.[0]
+      const timestamp = timestampField ? record[timestampField] : null
+
+      if (!timestamp) {
+        console.error('No valid timestamp found in sleep record. Available fields:', Object.keys(record))
+        continue // Skip this record but continue processing others
+      }
+
+      if (typeof timestamp === 'number') {
+        startTime = new Date(timestamp)
+      } else if (timestamp.includes('T')) {
+        // If it's an ISO string
+        startTime = new Date(timestamp)
+      } else {
+        // If it's just a date string, assume start of day
+        startTime = new Date(timestamp + 'T00:00:00Z')
+      }
+      
+      // Validate the timestamp
+      if (isNaN(startTime.getTime())) {
+        console.error(`Invalid timestamp: ${timestamp}`)
+        continue // Skip this record but continue processing others
+      }
+
+      console.log('Parsed timestamp:', startTime.toISOString())
+    } catch (error) {
+      console.error('Error parsing timestamp:', error)
+      console.error('Raw sleep record:', record)
+      continue // Skip this record but continue processing others
     }
-  }
 
-  // Handle timestamp conversion
-  let startTime: Date
-  try {
-    // Try different possible timestamp fields
-    const timestamp = fileContent.startTimeGMT || fileContent.startTime || fileContent.startTimeLocal || fileContent.calendarDate
-    if (!timestamp) {
-      console.error('No timestamp found in sleep data. Available fields:', Object.keys(fileContent))
-      throw new Error('No timestamp found in sleep data')
+    const sleepId = `${userId}_${startTime.getTime()}`
+
+    // Process sleep stages - try different field names
+    const stages = [
+      { stage: 'DEEP', duration: record.deepSleepSeconds || record.deepSleep || record.deep },
+      { stage: 'LIGHT', duration: record.lightSleepSeconds || record.lightSleep || record.light },
+      { stage: 'REM', duration: record.remSleepSeconds || record.remSleep || record.rem },
+      { stage: 'AWAKE', duration: record.awakeSleepSeconds || record.awakeSleep || record.awake }
+    ].filter(({ duration }) => typeof duration === 'number' && !isNaN(duration))
+
+    if (stages.length === 0) {
+      console.warn('No valid sleep stages found in record')
+      continue
     }
 
-    if (typeof timestamp === 'number') {
-      startTime = new Date(timestamp)
-    } else if (timestamp.includes('T')) {
-      // If it's an ISO string
-      startTime = new Date(timestamp)
-    } else {
-      // If it's just a date string, assume start of day
-      startTime = new Date(timestamp + 'T00:00:00Z')
-    }
-    
-    // Validate the timestamp
-    if (isNaN(startTime.getTime())) {
-      throw new Error(`Invalid timestamp: ${timestamp}`)
-    }
-
-    console.log('Parsed timestamp:', startTime.toISOString())
-  } catch (error) {
-    console.error('Error parsing timestamp:', error)
-    console.error('Raw sleep data:', fileContent)
-    throw error
-  }
-
-  const sleepId = `${userId}_${startTime.getTime()}`
-
-  // Process sleep stages
-  const stages = [
-    { stage: 'DEEP', duration: fileContent.deepSleepSeconds },
-    { stage: 'LIGHT', duration: fileContent.lightSleepSeconds },
-    { stage: 'REM', duration: fileContent.remSleepSeconds },
-    { stage: 'AWAKE', duration: fileContent.awakeSleepSeconds }
-  ]
-
-  const sleepStages = stages.map(({ stage, duration }) => ({
-    user_id: userId,
-    device_id: fileContent.deviceId || 'unknown',
-    source: 'garmin',
-    sleep_id: sleepId,
-    timestamp: startTime.toISOString(),
-    stage,
-    duration_seconds: duration,
-    extracted_at: new Date().toISOString(),
-    created_at: new Date().toISOString()
-  }))
-
-  const { error: stagesError } = await supabase
-    .from('sleep_stages')
-    .upsert(sleepStages, {
-      onConflict: 'sleep_id,timestamp,stage',
-      ignoreDuplicates: true
-    })
-
-  if (stagesError) {
-    console.error('Error inserting sleep stages:', stagesError)
-    throw stagesError
-  }
-
-  // Process sleep movement if available
-  if (typeof fileContent.sleepMovement === 'number') {
-    const sleepMovement = {
+    const sleepStages = stages.map(({ stage, duration }) => ({
       user_id: userId,
-      device_id: fileContent.deviceId || 'unknown',
+      device_id: record.deviceId || 'unknown',
       source: 'garmin',
       sleep_id: sleepId,
       timestamp: startTime.toISOString(),
-      movement_value: Math.round(fileContent.sleepMovement * 100),
+      stage,
+      duration_seconds: duration,
       extracted_at: new Date().toISOString(),
       created_at: new Date().toISOString()
-    }
+    }))
 
-    const { error: movementError } = await supabase
-      .from('sleep_movements')
-      .upsert([sleepMovement], {
-        onConflict: 'sleep_id,timestamp',
+    const { error: stagesError } = await supabase
+      .from('sleep_stages')
+      .upsert(sleepStages, {
+        onConflict: 'sleep_id,timestamp,stage',
         ignoreDuplicates: true
       })
 
-    if (movementError) {
-      console.error('Error inserting sleep movement:', movementError)
-      throw movementError
+    if (stagesError) {
+      console.error('Error inserting sleep stages:', stagesError)
+      throw stagesError
     }
-  }
 
-  console.log(`Imported sleep data for ${startTime.toISOString()}`)
+    // Process sleep movement if available
+    const movement = record.sleepMovement || record.movement
+    if (typeof movement === 'number') {
+      const sleepMovement = {
+        user_id: userId,
+        device_id: record.deviceId || 'unknown',
+        source: 'garmin',
+        sleep_id: sleepId,
+        timestamp: startTime.toISOString(),
+        movement_value: Math.round(movement * 100),
+        extracted_at: new Date().toISOString(),
+        created_at: new Date().toISOString()
+      }
+
+      const { error: movementError } = await supabase
+        .from('sleep_movements')
+        .upsert([sleepMovement], {
+          onConflict: 'sleep_id,timestamp',
+          ignoreDuplicates: true
+        })
+
+      if (movementError) {
+        console.error('Error inserting sleep movement:', movementError)
+        throw movementError
+      }
+    }
+
+    console.log(`Imported sleep data for ${startTime.toISOString()}`)
+  }
 }
 
 async function processFile(userId: string, bucketName: string, filePath: string) {
