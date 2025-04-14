@@ -229,46 +229,76 @@ async function processSleep(userId: string, fileContent: any) {
 
         // Find timestamp field
         console.log(`${logPrefix} Searching for date fields...`)
-        const dateFields = Object.entries(record)
-          .filter(([key, value]) => 
-            key.toLowerCase().includes('time') || 
-            key.toLowerCase().includes('date') ||
-            (typeof value === 'string' && value.includes('T'))
-          )
-        console.log(`${logPrefix} Found date fields:`, dateFields)
+        let startTime: Date | null = null;
 
-        // Handle timestamp conversion with detailed error tracking
-        let startTime: Date
-        try {
-          const timestampField = dateFields.find(([_, value]) => value !== null)?.[0]
-          const timestamp = timestampField ? record[timestampField] : null
-
-          if (!timestamp) {
-            console.error(`${logPrefix} No valid timestamp found. Available fields:`, Object.keys(record))
-            failedRecords++
-            continue
+        // First try the expected Garmin fields
+        if (record.startTimeGMT) {
+          try {
+            startTime = new Date(record.startTimeGMT);
+            if (!isNaN(startTime.getTime())) {
+              console.log(`${logPrefix} Using startTimeGMT:`, record.startTimeGMT);
+            } else {
+              startTime = null;
+            }
+          } catch (e) {
+            console.warn(`${logPrefix} Failed to parse startTimeGMT:`, record.startTimeGMT);
+            startTime = null;
           }
+        }
 
-          if (typeof timestamp === 'number') {
-            startTime = new Date(timestamp)
-          } else if (typeof timestamp === 'string' && timestamp.includes('T')) {
-            startTime = new Date(timestamp)
-          } else if (typeof timestamp === 'string') {
-            startTime = new Date(timestamp + 'T00:00:00Z')
-          } else {
-            throw new Error(`Invalid timestamp format: ${typeof timestamp}`)
+        // If startTimeGMT failed, try startTimeLocal
+        if (!startTime && record.startTimeLocal) {
+          try {
+            startTime = new Date(record.startTimeLocal);
+            if (!isNaN(startTime.getTime())) {
+              console.log(`${logPrefix} Using startTimeLocal:`, record.startTimeLocal);
+            } else {
+              startTime = null;
+            }
+          } catch (e) {
+            console.warn(`${logPrefix} Failed to parse startTimeLocal:`, record.startTimeLocal);
+            startTime = null;
           }
+        }
+
+        // If standard fields failed, try to find any timestamp field
+        if (!startTime) {
+          const dateFields = Object.entries(record)
+            .filter(([key, value]) => 
+              (key.toLowerCase().includes('time') || 
+               key.toLowerCase().includes('date')) &&
+              value !== null && value !== undefined
+            );
           
-          if (isNaN(startTime.getTime())) {
-            throw new Error(`Invalid date value: ${timestamp}`)
-          }
+          console.log(`${logPrefix} Found date fields:`, dateFields);
 
-          console.log(`${logPrefix} Successfully parsed timestamp:`, startTime.toISOString())
-        } catch (error) {
-          console.error(`${logPrefix} Error parsing timestamp:`, error)
-          console.error(`${logPrefix} Raw record:`, record)
-          failedRecords++
-          continue
+          for (const [key, value] of dateFields) {
+            try {
+              if (typeof value === 'number') {
+                startTime = new Date(value);
+              } else if (typeof value === 'string') {
+                startTime = new Date(value);
+              }
+              
+              if (startTime && !isNaN(startTime.getTime())) {
+                console.log(`${logPrefix} Successfully parsed timestamp from ${key}:`, value);
+                break;
+              } else {
+                startTime = null;
+              }
+            } catch (e) {
+              console.warn(`${logPrefix} Failed to parse timestamp from ${key}:`, value);
+              startTime = null;
+              continue;
+            }
+          }
+        }
+
+        if (!startTime) {
+          console.error(`${logPrefix} No valid timestamp found. Available fields:`, Object.keys(record));
+          console.error(`${logPrefix} Raw record:`, JSON.stringify(record, null, 2));
+          failedRecords++;
+          continue;
         }
 
         const sleepId = `${userId}_${startTime.getTime()}`
