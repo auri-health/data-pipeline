@@ -245,8 +245,23 @@ async function processSleep(userId: string, fileContent: any) {
           console.log(`${logPrefix} Processing record ${i}/${sleepRecords.length}`)
           let startTime: Date | null = null
 
-          // First try the expected Garmin fields
-          if (record.startTimeGMT) {
+          // First try sleepStartTimestampGMT
+          if (record.sleepStartTimestampGMT) {
+            try {
+              startTime = new Date(record.sleepStartTimestampGMT)
+              if (!isNaN(startTime.getTime())) {
+                console.log(`${logPrefix} Using sleepStartTimestampGMT:`, record.sleepStartTimestampGMT)
+              } else {
+                startTime = null
+              }
+            } catch (e) {
+              console.warn(`${logPrefix} Failed to parse sleepStartTimestampGMT:`, record.sleepStartTimestampGMT)
+              startTime = null
+            }
+          }
+
+          // Then try startTimeGMT
+          if (!startTime && record.startTimeGMT) {
             try {
               startTime = new Date(record.startTimeGMT)
               if (!isNaN(startTime.getTime())) {
