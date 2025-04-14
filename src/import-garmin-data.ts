@@ -168,7 +168,7 @@ async function processHeartRates(userId: string, fileContent: any) {
     if (Array.isArray(hr)) {
       return {
         user_id: userId,
-        device_id: deviceId || 'unknown',
+        device_id: '0f96861e-49b1-4aa0-b499-45267084f68c',
         source: 'garmin',
         timestamp: new Date(hr[0]).toISOString(),
         heart_rate: hr[1],
@@ -181,7 +181,7 @@ async function processHeartRates(userId: string, fileContent: any) {
     // Handle object format {timestamp, heartRate}
     return {
       user_id: userId,
-      device_id: readingDeviceId || deviceId || 'unknown',
+      device_id: '0f96861e-49b1-4aa0-b499-45267084f68c',
       source: 'garmin',
       timestamp: new Date(hr.timestamp || hr.time || hr.date).toISOString(),
       heart_rate: hr.heartRate || hr.value || hr.bpm,
