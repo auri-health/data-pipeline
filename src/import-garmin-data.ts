@@ -631,13 +631,71 @@ async function checkBucketFiles(processHistorical: boolean = false) {
   }
 }
 
+async function dumpImport() {
+  const userId = process.env.USER_ID
+  if (!userId) {
+    console.error('USER_ID environment variable is required for dump import')
+    process.exit(1)
+  }
+
+  const bucketName = 'garmin-data'
+  
+  try {
+    console.log(`Starting dump import for user "${userId}"...`)
+    
+    const { data, error } = await supabase.storage
+      .from(bucketName)
+      .list(userId, {
+        limit: 1000, // Increased limit for bulk import
+        sortBy: { column: 'name', order: 'asc' }
+      })
+
+    if (error) {
+      console.error('Storage API Error:', error)
+      throw error
+    }
+
+    if (!data || data.length === 0) {
+      console.log('No files found for user. This could mean:')
+      console.log('1. The bucket is empty')
+      console.log('2. The user folder does not exist')
+      console.log('3. Permissions are not configured correctly')
+      return
+    }
+
+    console.log(`Found ${data.length} files to process:`)
+    data.forEach(file => console.log(`- ${file.name}`))
+    
+    for (const file of data) {
+      console.log(`\nProcessing ${file.name}...`)
+      await processFile(userId, bucketName, `${userId}/${file.name}`)
+    }
+
+    console.log('\nDump import completed successfully')
+  } catch (err: any) {
+    console.error('Error during dump import:', err)
+    if (err.message) console.error('Error message:', err.message)
+    if (err.details) console.error('Error details:', err.details)
+    throw err
+  }
+}
+
 // Parse command line arguments
 const args = process.argv.slice(2)
 const processHistorical = args.includes('--historical')
+const dumpMode = args.includes('--dump')
 
-// Run the function
-checkBucketFiles(processHistorical)
-  .catch(error => {
-    console.error('Script failed:', error)
-    process.exit(1)
-  }) 
+// Run the appropriate function
+if (dumpMode) {
+  dumpImport()
+    .catch(error => {
+      console.error('Script failed:', error)
+      process.exit(1)
+    })
+} else {
+  checkBucketFiles(processHistorical)
+    .catch(error => {
+      console.error('Script failed:', error)
+      process.exit(1)
+    })
+} 

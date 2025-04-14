@@ -1,0 +1,56 @@
+{
+  "dailySleepDTO": {
+    "id": 1744588620000,
+    "userProfilePK": 80066949,
+    "calendarDate": "2025-04-14",
+    "sleepTimeSeconds": 29160,
+    "napTimeSeconds": 0,
+    "sleepWindowConfirmed": true,
+    "sleepWindowConfirmationType": "manually_confirmed",
+    "sleepStartTimestampGMT": 1744588620000,
+    "sleepEndTimestampGMT": 1744617840000,
+    "sleepStartTimestampLocal": 1744577820000,
+    "sleepEndTimestampLocal": 1744607040000,
+    "autoSleepStartTimestampGMT": 1744588620000,
+    "autoSleepEndTimestampGMT": 1744616400000,
+    "sleepQualityTypePK": null,
+    "sleepResultTypePK": null,
+    "unmeasurableSleepSeconds": 0,
+    "deepSleepSeconds": 10440,
+    "lightSleepSeconds": 18720,
+    "remSleepSeconds": 0,
+    "awakeSleepSeconds": 60,
+    "deviceRemCapable": false,
+    "retro": false
+  },
+  "sleepMovement": [
+    {
+      "startGMT": "2025-04-13T22:57:00.0",
+      "endGMT": "2025-04-13T22:58:00.0",
+      "activityLevel": 7.297084490256272
+    },
+    {
+      "startGMT": "2025-04-13T22:58:00.0",
+      "endGMT": "2025-04-13T22:59:00.0",
+      "activityLevel": 7.20409841134917
+    },
+    {
+      "startGMT": "2025-04-13T22:59:00.0",
+      "endGMT": "2025-04-13T23:00:00.0",
+      "activityLevel": 7.1034498165743845
+    },
+    {
+      "startGMT": "2025-04-13T23:00:00.0",
+      "endGMT": "2025-04-13T23:01:00.0",
+      "activityLevel": 7.000353348153048
+    },
+    {
+      "startGMT": "2025-04-13T23:01:00.0",
+      "endGMT": "2025-04-13T23:02:00.0",
+      "activityLevel": 6.888130503863835
+    },
+    {
+      "startGMT": "2025-04-13T23:02:00.0",
+      "endGMT": "2025-04-13T23:03:00.0",
+      "activityLevel": 6.76341243291605
+    },
