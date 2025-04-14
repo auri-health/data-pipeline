@@ -303,16 +303,16 @@ async function processSleep(userId: string, fileContent: any) {
 
           // Process sleep stages
           const stages = [
-            { stage: 'DEEP', duration: record.deepSleepSeconds || record.deepSleep || 0 },
-            { stage: 'LIGHT', duration: record.lightSleepSeconds || record.lightSleep || 0 },
-            { stage: 'REM', duration: record.remSleepSeconds || record.remSleep || 0 },
-            { stage: 'AWAKE', duration: record.awakeSleepSeconds || record.awakeSleep || 0 }
+            { stage: 'deep', duration: record.deepSleepSeconds || record.deepSleep || 0 },
+            { stage: 'light', duration: record.lightSleepSeconds || record.lightSleep || 0 },
+            { stage: 'rem', duration: record.remSleepSeconds || record.remSleep || 0 },
+            { stage: 'awake', duration: record.awakeSleepSeconds || record.awakeSleep || 0 }
           ].filter(({ duration }) => typeof duration === 'number' && duration > 0)
 
           const sleepStages = stages.map(({ stage, duration }) => ({
             user_id: userId,
             device_id: record.deviceId || 'unknown',
-            source: 'GARMIN',
+            source: 'garmin',
             sleep_id,
             timestamp: startTime.toISOString(),
             stage,
@@ -332,7 +332,7 @@ async function processSleep(userId: string, fileContent: any) {
               return {
                 user_id: userId,
                 device_id: record.deviceId || 'unknown',
-                source: 'GARMIN',
+                source: 'garmin',
                 sleep_id,
                 timestamp: movementTime.toISOString(),
                 movement_value: typeof movement === 'number' ? movement : movement.value || 0,
