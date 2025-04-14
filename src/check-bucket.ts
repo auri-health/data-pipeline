@@ -335,7 +335,9 @@ async function processSleep(userId: string, fileContent: any) {
                 source: 'garmin',
                 sleep_id,
                 timestamp: movementTime.toISOString(),
-                movement_value: typeof movement === 'number' ? movement : movement.value || 0,
+                movement_value: typeof movement === 'number' ? movement : 
+                  typeof movement === 'object' && movement.activityLevel ? movement.activityLevel : 
+                  movement.value || 0,
                 extracted_at: new Date().toISOString(),
                 created_at: new Date().toISOString()
               }
