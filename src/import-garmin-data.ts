@@ -122,9 +122,11 @@ async function processActivities(userId: string, fileContent: GarminActivity[]) 
 
 async function processHeartRates(userId: string, fileContent: any) {
   console.log('Processing heart rate data...')
+  console.log('File content structure:', Object.keys(fileContent))
   
   // Try different possible structures
   let heartRateData: any[] = []
+  let deviceId = fileContent.deviceId || fileContent.device_id || fileContent.device || null
   
   if (Array.isArray(fileContent)) {
     console.log('Heart rate data is an array')
@@ -132,18 +134,22 @@ async function processHeartRates(userId: string, fileContent: any) {
   } else if (fileContent.heartRateValues) {
     console.log('Heart rate data is in heartRateValues')
     heartRateData = fileContent.heartRateValues
+    deviceId = deviceId || fileContent.metadata?.deviceId
   } else if (fileContent.data && Array.isArray(fileContent.data)) {
     console.log('Heart rate data is in data array')
     heartRateData = fileContent.data
+    deviceId = deviceId || fileContent.metadata?.deviceId
   } else if (fileContent.readings && Array.isArray(fileContent.readings)) {
     console.log('Heart rate data is in readings array')
     heartRateData = fileContent.readings
+    deviceId = deviceId || fileContent.metadata?.deviceId
   } else {
     console.error('Could not find heart rate data in expected formats:', Object.keys(fileContent))
     return
   }
 
   console.log(`Found ${heartRateData.length} heart rate readings`)
+  console.log('Device ID from file:', deviceId)
 
   if (heartRateData.length === 0) {
     console.log('No heart rate readings to import')
@@ -151,14 +157,18 @@ async function processHeartRates(userId: string, fileContent: any) {
   }
 
   // Sample the first item to understand the structure
-  console.log('Sample heart rate reading:', JSON.stringify(heartRateData[0], null, 2))
+  const sampleReading = heartRateData[0]
+  console.log('Sample heart rate reading:', JSON.stringify(sampleReading, null, 2))
+  console.log('Sample reading device ID:', sampleReading.deviceId || sampleReading.device_id || sampleReading.device)
 
   const heartRates = heartRateData.map(hr => {
+    const readingDeviceId = hr.deviceId || hr.device_id || hr.device
+    
     // Handle array format [timestamp, value]
     if (Array.isArray(hr)) {
       return {
         user_id: userId,
-        device_id: fileContent.deviceId || 'unknown',
+        device_id: deviceId || 'unknown',
         source: 'garmin',
         timestamp: new Date(hr[0]).toISOString(),
         heart_rate: hr[1],
@@ -171,7 +181,7 @@ async function processHeartRates(userId: string, fileContent: any) {
     // Handle object format {timestamp, heartRate}
     return {
       user_id: userId,
-      device_id: hr.deviceId || fileContent.deviceId || 'unknown',
+      device_id: readingDeviceId || deviceId || 'unknown',
       source: 'garmin',
       timestamp: new Date(hr.timestamp || hr.time || hr.date).toISOString(),
       heart_rate: hr.heartRate || hr.value || hr.bpm,
@@ -180,6 +190,13 @@ async function processHeartRates(userId: string, fileContent: any) {
       created_at: new Date().toISOString()
     }
   }).filter(hr => hr.heart_rate !== null) // Filter out null heart rate values
+
+  // Log device ID distribution
+  const deviceIdCounts = heartRates.reduce((acc: {[key: string]: number}, hr) => {
+    acc[hr.device_id] = (acc[hr.device_id] || 0) + 1
+    return acc
+  }, {})
+  console.log('Device ID distribution:', deviceIdCounts)
 
   const { error } = await supabase
     .from('heart_rate_readings')
