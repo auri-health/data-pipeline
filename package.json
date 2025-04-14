@@ -2,11 +2,11 @@
   "name": "data-pipeline",
   "version": "1.0.0",
   "description": "Garmin data pipeline for Supabase",
-  "main": "dist/check-bucket.js",
+  "main": "dist/import-garmin-data.js",
   "scripts": {
     "build": "tsc",
-    "start": "node dist/check-bucket.js",
-    "check": "ts-node src/check-bucket.ts"
+    "start": "node dist/import-garmin-data.js",
+    "check": "ts-node src/import-garmin-data.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.39.7"
