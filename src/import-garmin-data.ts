@@ -379,25 +379,28 @@ async function processSleep(userId: string, fileContent: any) {
 
           // Process sleep movements timeseries if available
           if (record.movementData && Array.isArray(record.movementData)) {
-            const movements = record.movementData.map((movement: any, index: number) => {
-              // Calculate timestamp for each movement data point
-              // Assuming movements are evenly distributed across sleep duration
-              const timeOffset = (record.durationInSeconds || record.duration || 0) * (index / record.movementData.length) * 1000
-              const movementTime = new Date(startTime.getTime() + timeOffset)
-              
-              return {
-                user_id: userId,
-                device_id: '0f96861e-49b1-4aa0-b499-45267084f68c',
-                source: 'garmin',
-                sleep_id,
-                timestamp: movementTime.toISOString(),
-                movement_value: typeof movement === 'number' ? movement : 
-                  typeof movement === 'object' && movement.activityLevel ? movement.activityLevel : 
-                  movement.value || 0,
-                extracted_at: new Date().toISOString(),
-                created_at: new Date().toISOString()
-              }
-            })
+            const movements = record.movementData.map((movement: any) => ({
+              user_id: userId,
+              device_id: '0f96861e-49b1-4aa0-b499-45267084f68c',
+              source: 'garmin',
+              sleep_id,
+              timestamp: new Date(movement.startGMT).toISOString(),
+              movement_value: movement.activityLevel,
+              extracted_at: new Date().toISOString(),
+              created_at: new Date().toISOString()
+            }))
+            sleepMovementsRecords.push(...movements)
+          } else if (fileContent.sleepMovement && Array.isArray(fileContent.sleepMovement)) {
+            const movements = fileContent.sleepMovement.map((movement: GarminSleepMovement) => ({
+              user_id: userId,
+              device_id: '0f96861e-49b1-4aa0-b499-45267084f68c',
+              source: 'garmin',
+              sleep_id,
+              timestamp: new Date(movement.startGMT).toISOString(),
+              movement_value: movement.activityLevel,
+              extracted_at: new Date().toISOString(),
+              created_at: new Date().toISOString()
+            }))
             sleepMovementsRecords.push(...movements)
           }
 
