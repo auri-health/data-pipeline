@@ -14,28 +14,52 @@ async function generateDailySummaries(startDate: string, endDate: string) {
   // Get all unique user_ids and dates combinations that need processing
   const { data: activities, error: activitiesError } = await supabase
     .from('user_activities')
-    .select('user_id, date')
-    .gte('date', startDate)
-    .lte('date', endDate)
-    .order('date')
+    .select('user_id, timestamp')
+    .gte('timestamp', `${startDate}T00:00:00Z`)
+    .lt('timestamp', `${endDate}T23:59:59Z`)
+    .order('timestamp')
 
   if (activitiesError) {
     console.error('Error fetching activities:', activitiesError)
     return
   }
 
+  // Create a Set to track unique user-date combinations
+  const processedDates = new Set<string>()
+  
   // Process each unique user-date combination
   for (const activity of activities || []) {
-    const { user_id, date } = activity
+    const { user_id, timestamp } = activity
+    const date = new Date(timestamp).toISOString().split('T')[0]
+    
+    // Skip if we've already processed this user-date combination
+    const key = `${user_id}-${date}`
+    if (processedDates.has(key)) continue
+    processedDates.add(key)
+
     console.log(`Processing user ${user_id} for date ${date}`)
 
-    // Get activity data (already per day)
-    const { data: dailyActivity } = await supabase
+    // Get activity data for the day
+    const { data: dailyActivities } = await supabase
       .from('user_activities')
       .select('*')
       .eq('user_id', user_id)
-      .eq('date', date)
-      .single()
+      .gte('timestamp', `${date}T00:00:00Z`)
+      .lt('timestamp', `${date}T23:59:59Z`)
+
+    // Aggregate daily activity data
+    const dailyActivity = dailyActivities?.reduce((acc, curr) => ({
+      total_calories: (acc.total_calories || 0) + (curr.total_calories || 0),
+      active_calories: (acc.active_calories || 0) + (curr.active_calories || 0),
+      bmr_calories: curr.bmr_calories || acc.bmr_calories,
+      steps: (acc.steps || 0) + (curr.steps || 0),
+      distance_meters: (acc.distance_meters || 0) + (curr.distance_meters || 0),
+      highly_active_seconds: (acc.highly_active_seconds || 0) + (curr.highly_active_seconds || 0),
+      active_seconds: (acc.active_seconds || 0) + (curr.active_seconds || 0),
+      sedentary_seconds: (acc.sedentary_seconds || 0) + (curr.sedentary_seconds || 0),
+      moderate_intensity_minutes: (acc.moderate_intensity_minutes || 0) + (curr.moderate_intensity_minutes || 0),
+      vigorous_intensity_minutes: (acc.vigorous_intensity_minutes || 0) + (curr.vigorous_intensity_minutes || 0),
+    }), {})
 
     // Get activity count
     const { data: activityStats } = await supabase.rpc('get_daily_activity_stats', {
