@@ -221,6 +221,7 @@ async function processSleep(userId: string, fileContent: any) {
     for (let i = 0; i < sleepRecords.length; i += BATCH_SIZE) {
       const batch = sleepRecords.slice(i, i + BATCH_SIZE)
       const processedRecords = []
+      const sleepStagesRecords = []
       
       for (const record of batch) {
         try {
@@ -300,6 +301,7 @@ async function processSleep(userId: string, fileContent: any) {
           // Generate a unique sleep_id based on user and timestamp
           const sleep_id = `${userId}_${startTime.getTime()}`
 
+          // Process main sleep record
           const processedRecord = {
             sleep_id,
             user_id: userId,
@@ -326,32 +328,75 @@ async function processSleep(userId: string, fileContent: any) {
             updated_at: new Date().toISOString()
           }
 
+          // Process sleep stages
+          const stages = [
+            { stage: 'DEEP', duration: record.deepSleepSeconds || record.deepSleep || 0 },
+            { stage: 'LIGHT', duration: record.lightSleepSeconds || record.lightSleep || 0 },
+            { stage: 'REM', duration: record.remSleepSeconds || record.remSleep || 0 },
+            { stage: 'AWAKE', duration: record.awakeSleepSeconds || record.awakeSleep || 0 }
+          ].filter(({ duration }) => typeof duration === 'number' && duration > 0)
+
+          const sleepStages = stages.map(({ stage, duration }) => ({
+            user_id: userId,
+            device_id: record.deviceId || 'unknown',
+            source: 'GARMIN',
+            sleep_id,
+            timestamp: startTime.toISOString(),
+            stage,
+            duration_seconds: duration,
+            extracted_at: new Date().toISOString(),
+            created_at: new Date().toISOString()
+          }))
+
           processedRecords.push(processedRecord)
+          sleepStagesRecords.push(...sleepStages)
+
         } catch (error) {
           console.error(`${logPrefix} Error processing sleep record:`, error)
           failedRecords++
         }
       }
 
+      // Insert main sleep records
       if (processedRecords.length > 0) {
         try {
-          const { error } = await supabase
+          const { error: sleepError } = await supabase
             .from('user_sleep')
             .upsert(processedRecords, {
               onConflict: 'sleep_id',
               ignoreDuplicates: true
             })
 
-          if (error) {
-            console.error(`${logPrefix} Error inserting sleep batch:`, error)
+          if (sleepError) {
+            console.error(`${logPrefix} Error inserting sleep batch:`, sleepError)
             failedRecords += processedRecords.length
           } else {
             successCount += processedRecords.length
-            console.log(`${logPrefix} Successfully processed batch ${i}-${i + processedRecords.length}`)
+            console.log(`${logPrefix} Successfully processed sleep batch ${i}-${i + processedRecords.length}`)
           }
         } catch (error) {
           console.error(`${logPrefix} Error upserting sleep batch:`, error)
           failedRecords += processedRecords.length
+        }
+      }
+
+      // Insert sleep stages
+      if (sleepStagesRecords.length > 0) {
+        try {
+          const { error: stagesError } = await supabase
+            .from('sleep_stages')
+            .upsert(sleepStagesRecords, {
+              onConflict: 'sleep_id,timestamp,stage',
+              ignoreDuplicates: true
+            })
+
+          if (stagesError) {
+            console.error(`${logPrefix} Error inserting sleep stages:`, stagesError)
+          } else {
+            console.log(`${logPrefix} Successfully inserted ${sleepStagesRecords.length} sleep stages`)
+          }
+        } catch (error) {
+          console.error(`${logPrefix} Error upserting sleep stages:`, error)
         }
       }
     }
