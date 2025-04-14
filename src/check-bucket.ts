@@ -198,225 +198,168 @@ async function processSleep(userId: string, fileContent: any) {
     console.log(`${logPrefix} Sleep data structure:`)
     console.log(`${logPrefix} Available fields:`, Object.keys(fileContent))
     
-    // Validate input
-    if (!fileContent) {
-      throw new Error('Sleep data is null or undefined')
+    // Determine if we're dealing with an array or object
+    let sleepRecords: any[] = []
+    
+    if (Array.isArray(fileContent)) {
+      sleepRecords = fileContent
+    } else if (fileContent.sleepData && Array.isArray(fileContent.sleepData)) {
+      sleepRecords = fileContent.sleepData
+    } else if (fileContent.data && Array.isArray(fileContent.data)) {
+      sleepRecords = fileContent.data
+    } else {
+      sleepRecords = [fileContent] // Single record
     }
 
-    // Handle array of sleep records
-    let sleepRecords = Array.isArray(fileContent) ? fileContent : [fileContent]
-    console.log(`${logPrefix} Found ${sleepRecords.length} sleep records to process`)
-
-    if (sleepRecords.length === 0) {
-      console.warn(`${logPrefix} No sleep records found in the data`)
-      return
-    }
-
-    let processedRecords = 0
+    console.log(`${logPrefix} Found ${sleepRecords.length} sleep records`)
+    
+    // Process in batches of 50 records
+    const BATCH_SIZE = 50
+    let successCount = 0
     let failedRecords = 0
-    let skippedRecords = 0
+    
+    for (let i = 0; i < sleepRecords.length; i += BATCH_SIZE) {
+      const batch = sleepRecords.slice(i, i + BATCH_SIZE)
+      const processedRecords = []
+      
+      for (const record of batch) {
+        try {
+          // Find timestamp field
+          console.log(`${logPrefix} Processing record ${i}/${sleepRecords.length}`)
+          let startTime: Date | null = null
 
-    for (const record of sleepRecords) {
-      try {
-        console.log(`\n${logPrefix} Processing sleep record:`, JSON.stringify(record, null, 2))
-        
-        // Validate required fields
-        if (!record) {
-          console.error(`${logPrefix} Invalid record: Record is null or undefined`)
-          failedRecords++
-          continue
-        }
-
-        // Find timestamp field
-        console.log(`${logPrefix} Searching for date fields...`)
-        let startTime: Date | null = null;
-
-        // First try the expected Garmin fields
-        if (record.startTimeGMT) {
-          try {
-            startTime = new Date(record.startTimeGMT);
-            if (!isNaN(startTime.getTime())) {
-              console.log(`${logPrefix} Using startTimeGMT:`, record.startTimeGMT);
-            } else {
-              startTime = null;
-            }
-          } catch (e) {
-            console.warn(`${logPrefix} Failed to parse startTimeGMT:`, record.startTimeGMT);
-            startTime = null;
-          }
-        }
-
-        // If startTimeGMT failed, try startTimeLocal
-        if (!startTime && record.startTimeLocal) {
-          try {
-            startTime = new Date(record.startTimeLocal);
-            if (!isNaN(startTime.getTime())) {
-              console.log(`${logPrefix} Using startTimeLocal:`, record.startTimeLocal);
-            } else {
-              startTime = null;
-            }
-          } catch (e) {
-            console.warn(`${logPrefix} Failed to parse startTimeLocal:`, record.startTimeLocal);
-            startTime = null;
-          }
-        }
-
-        // If standard fields failed, try to find any timestamp field
-        if (!startTime) {
-          const dateFields = Object.entries(record)
-            .filter(([key, value]) => 
-              (key.toLowerCase().includes('time') || 
-               key.toLowerCase().includes('date')) &&
-              value !== null && value !== undefined
-            );
-          
-          console.log(`${logPrefix} Found date fields:`, dateFields);
-
-          for (const [key, value] of dateFields) {
+          // First try the expected Garmin fields
+          if (record.startTimeGMT) {
             try {
-              if (typeof value === 'number') {
-                startTime = new Date(value);
-              } else if (typeof value === 'string') {
-                startTime = new Date(value);
-              }
-              
-              if (startTime && !isNaN(startTime.getTime())) {
-                console.log(`${logPrefix} Successfully parsed timestamp from ${key}:`, value);
-                break;
+              startTime = new Date(record.startTimeGMT)
+              if (!isNaN(startTime.getTime())) {
+                console.log(`${logPrefix} Using startTimeGMT:`, record.startTimeGMT)
               } else {
-                startTime = null;
+                startTime = null
               }
             } catch (e) {
-              console.warn(`${logPrefix} Failed to parse timestamp from ${key}:`, value);
-              startTime = null;
-              continue;
+              console.warn(`${logPrefix} Failed to parse startTimeGMT:`, record.startTimeGMT)
+              startTime = null
             }
           }
+
+          // If startTimeGMT failed, try startTimeLocal
+          if (!startTime && record.startTimeLocal) {
+            try {
+              startTime = new Date(record.startTimeLocal)
+              if (!isNaN(startTime.getTime())) {
+                console.log(`${logPrefix} Using startTimeLocal:`, record.startTimeLocal)
+              } else {
+                startTime = null
+              }
+            } catch (e) {
+              console.warn(`${logPrefix} Failed to parse startTimeLocal:`, record.startTimeLocal)
+              startTime = null
+            }
+          }
+
+          // If standard fields failed, try to find any timestamp field
+          if (!startTime) {
+            const dateFields = Object.entries(record)
+              .filter(([key, value]) => 
+                (key.toLowerCase().includes('time') || 
+                 key.toLowerCase().includes('date')) &&
+                value !== null && value !== undefined
+              )
+            
+            console.log(`${logPrefix} Found date fields:`, dateFields)
+
+            for (const [key, value] of dateFields) {
+              try {
+                if (typeof value === 'number') {
+                  startTime = new Date(value)
+                } else if (typeof value === 'string') {
+                  startTime = new Date(value)
+                }
+                
+                if (startTime && !isNaN(startTime.getTime())) {
+                  console.log(`${logPrefix} Successfully parsed timestamp from ${key}:`, value)
+                  break
+                } else {
+                  startTime = null
+                }
+              } catch (e) {
+                console.warn(`${logPrefix} Failed to parse timestamp from ${key}:`, value)
+                startTime = null
+                continue
+              }
+            }
+          }
+
+          if (!startTime) {
+            console.error(`${logPrefix} No valid timestamp found in record:`, record)
+            failedRecords++
+            continue
+          }
+
+          // Generate a unique sleep_id based on user and timestamp
+          const sleep_id = `${userId}_${startTime.getTime()}`
+
+          const processedRecord = {
+            sleep_id,
+            user_id: userId,
+            start_time: startTime.toISOString(),
+            duration_seconds: record.durationInSeconds || record.duration || 0,
+            deep_sleep_seconds: record.deepSleepSeconds || 0,
+            light_sleep_seconds: record.lightSleepSeconds || 0,
+            rem_sleep_seconds: record.remSleepSeconds || 0,
+            awake_seconds: record.awakeSleepSeconds || 0,
+            sleep_movement: record.sleepMovement || 0,
+            source: 'GARMIN',
+            metadata: {
+              ...record,
+              // Exclude fields that are already in the main columns
+              deepSleepSeconds: undefined,
+              lightSleepSeconds: undefined,
+              remSleepSeconds: undefined,
+              awakeSleepSeconds: undefined,
+              sleepMovement: undefined,
+              startTimeGMT: undefined,
+              durationInSeconds: undefined
+            },
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          }
+
+          processedRecords.push(processedRecord)
+        } catch (error) {
+          console.error(`${logPrefix} Error processing sleep record:`, error)
+          failedRecords++
         }
+      }
 
-        if (!startTime) {
-          console.error(`${logPrefix} No valid timestamp found. Available fields:`, Object.keys(record));
-          console.error(`${logPrefix} Raw record:`, JSON.stringify(record, null, 2));
-          failedRecords++;
-          continue;
-        }
-
-        const sleepId = `${userId}_${startTime.getTime()}`
-        console.log(`${logPrefix} Generated sleep_id: ${sleepId}`)
-
-        // Process sleep stages with validation
-        const stages = [
-          { stage: 'DEEP', duration: record.deepSleepSeconds || record.deepSleep || record.deep },
-          { stage: 'LIGHT', duration: record.lightSleepSeconds || record.lightSleep || record.light },
-          { stage: 'REM', duration: record.remSleepSeconds || record.remSleep || record.rem },
-          { stage: 'AWAKE', duration: record.awakeSleepSeconds || record.awakeSleep || record.awake }
-        ].filter(({ duration }) => typeof duration === 'number' && !isNaN(duration))
-
-        if (stages.length === 0) {
-          console.warn(`${logPrefix} No valid sleep stages found in record`)
-          skippedRecords++
-          continue
-        }
-
-        console.log(`${logPrefix} Found ${stages.length} valid sleep stages`)
-
-        const sleepStages = stages.map(({ stage, duration }) => ({
-          user_id: userId,
-          device_id: record.deviceId || 'unknown',
-          source: 'garmin',
-          sleep_id: sleepId,
-          timestamp: startTime.toISOString(),
-          stage,
-          duration_seconds: duration,
-          extracted_at: new Date().toISOString(),
-          created_at: new Date().toISOString()
-        }))
-
-        // Insert sleep stages with transaction
+      if (processedRecords.length > 0) {
         try {
-          console.log(`${logPrefix} Inserting ${sleepStages.length} sleep stages...`)
-          const { error: stagesError } = await supabase
-            .from('sleep_stages')
-            .upsert(sleepStages, {
-              onConflict: 'sleep_id,timestamp,stage',
+          const { error } = await supabase
+            .from('user_sleep')
+            .upsert(processedRecords, {
+              onConflict: 'sleep_id',
               ignoreDuplicates: true
             })
 
-          if (stagesError) {
-            throw stagesError
+          if (error) {
+            console.error(`${logPrefix} Error inserting sleep batch:`, error)
+            failedRecords += processedRecords.length
+          } else {
+            successCount += processedRecords.length
+            console.log(`${logPrefix} Successfully processed batch ${i}-${i + processedRecords.length}`)
           }
-
-          console.log(`${logPrefix} Successfully inserted sleep stages for ${startTime.toISOString()}`)
-        } catch (error: unknown) {
-          const supabaseError = error as SupabaseError
-          console.error(`${logPrefix} Error inserting sleep stages:`, error)
-          if (supabaseError.details) console.error(`${logPrefix} Error details:`, supabaseError.details)
-          if (supabaseError.hint) console.error(`${logPrefix} Error hint:`, supabaseError.hint)
-          failedRecords++
-          continue
+        } catch (error) {
+          console.error(`${logPrefix} Error upserting sleep batch:`, error)
+          failedRecords += processedRecords.length
         }
-
-        // Process sleep movement if available
-        const movement = record.sleepMovement || record.movement
-        if (typeof movement === 'number' && !isNaN(movement)) {
-          try {
-            console.log(`${logPrefix} Processing sleep movement data...`)
-            const sleepMovement = {
-              user_id: userId,
-              device_id: record.deviceId || 'unknown',
-              source: 'garmin',
-              sleep_id: sleepId,
-              timestamp: startTime.toISOString(),
-              movement_value: Math.round(movement * 100),
-              extracted_at: new Date().toISOString(),
-              created_at: new Date().toISOString()
-            }
-
-            const { error: movementError } = await supabase
-              .from('sleep_movements')
-              .upsert([sleepMovement], {
-                onConflict: 'sleep_id,timestamp',
-                ignoreDuplicates: true
-              })
-
-            if (movementError) {
-              throw movementError
-            }
-
-            console.log(`${logPrefix} Successfully inserted sleep movement data`)
-          } catch (error: unknown) {
-            const supabaseError = error as SupabaseError
-            console.error(`${logPrefix} Error inserting sleep movement:`, error)
-            if (supabaseError.details) console.error(`${logPrefix} Error details:`, supabaseError.details)
-            if (supabaseError.hint) console.error(`${logPrefix} Error hint:`, supabaseError.hint)
-            // Don't increment failedRecords as movement is optional
-          }
-        }
-
-        processedRecords++
-      } catch (recordError) {
-        console.error(`${logPrefix} Error processing sleep record:`, recordError)
-        failedRecords++
       }
     }
 
-    // Log summary statistics
-    console.log(`\n${logPrefix} Processing Summary:`)
-    console.log(`${logPrefix} Total records: ${sleepRecords.length}`)
-    console.log(`${logPrefix} Successfully processed: ${processedRecords}`)
-    console.log(`${logPrefix} Failed: ${failedRecords}`)
-    console.log(`${logPrefix} Skipped: ${skippedRecords}`)
-
-    if (failedRecords > 0) {
-      throw new Error(`Failed to process ${failedRecords} sleep records`)
-    }
-
-  } catch (error: unknown) {
-    const supabaseError = error as SupabaseError
-    console.error(`${logPrefix} Fatal error in sleep processing:`, error)
-    if (supabaseError.details) console.error(`${logPrefix} Error details:`, supabaseError.details)
-    if (supabaseError.hint) console.error(`${logPrefix} Error hint:`, supabaseError.hint)
-    throw error // Re-throw to be handled by the main process
+    console.log(`${logPrefix} Sleep processing complete. Success: ${successCount}, Failed: ${failedRecords}`)
+  } catch (error) {
+    console.error(`${logPrefix} Fatal error processing sleep data:`, error)
+    throw error
   }
 }
 
