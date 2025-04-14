@@ -451,6 +451,13 @@ async function processSteps(userId: string, fileContent: any) {
   } else if (fileContent.data && Array.isArray(fileContent.data)) {
     console.log('Steps data is in data array')
     stepsData = fileContent.data
+  } else if (typeof fileContent === 'number') {
+    // Handle case where content is just a single number
+    console.log('Steps data is a single number')
+    stepsData = [{
+      steps: fileContent,
+      timestamp: new Date().toISOString().split('T')[0] // Use today's date
+    }]
   } else {
     console.error('Could not find steps data in expected formats:', Object.keys(fileContent))
     return
