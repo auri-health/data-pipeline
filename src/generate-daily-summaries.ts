@@ -8,6 +8,19 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 )
 
+interface DailyActivityAggregation {
+  total_calories: number;
+  active_calories: number;
+  bmr_calories: number;
+  steps: number;
+  distance_meters: number;
+  highly_active_seconds: number;
+  active_seconds: number;
+  sedentary_seconds: number;
+  moderate_intensity_minutes: number;
+  vigorous_intensity_minutes: number;
+}
+
 async function generateDailySummaries(startDate: string, endDate: string) {
   console.log(`Generating daily summaries from ${startDate} to ${endDate}`)
 
@@ -47,19 +60,33 @@ async function generateDailySummaries(startDate: string, endDate: string) {
       .gte('created_at', `${date}T00:00:00Z`)
       .lt('created_at', `${date}T23:59:59Z`)
 
-    // Aggregate daily activity data
+    // Initialize aggregation with default values
+    const initialAggregation: DailyActivityAggregation = {
+      total_calories: 0,
+      active_calories: 0,
+      bmr_calories: 0,
+      steps: 0,
+      distance_meters: 0,
+      highly_active_seconds: 0,
+      active_seconds: 0,
+      sedentary_seconds: 0,
+      moderate_intensity_minutes: 0,
+      vigorous_intensity_minutes: 0
+    }
+
+    // Aggregate daily activity data with proper number conversion
     const dailyActivity = dailyActivities?.reduce((acc, curr) => ({
-      total_calories: (acc.total_calories || 0) + (curr.total_calories || 0),
-      active_calories: (acc.active_calories || 0) + (curr.active_calories || 0),
-      bmr_calories: curr.bmr_calories || acc.bmr_calories,
-      steps: (acc.steps || 0) + (curr.steps || 0),
-      distance_meters: (acc.distance_meters || 0) + (curr.distance_meters || 0),
-      highly_active_seconds: (acc.highly_active_seconds || 0) + (curr.highly_active_seconds || 0),
-      active_seconds: (acc.active_seconds || 0) + (curr.active_seconds || 0),
-      sedentary_seconds: (acc.sedentary_seconds || 0) + (curr.sedentary_seconds || 0),
-      moderate_intensity_minutes: (acc.moderate_intensity_minutes || 0) + (curr.moderate_intensity_minutes || 0),
-      vigorous_intensity_minutes: (acc.vigorous_intensity_minutes || 0) + (curr.vigorous_intensity_minutes || 0),
-    }), {})
+      total_calories: acc.total_calories + (Number(curr.total_calories) || 0),
+      active_calories: acc.active_calories + (Number(curr.active_calories) || 0),
+      bmr_calories: Number(curr.bmr_calories) || acc.bmr_calories,
+      steps: acc.steps + (Number(curr.steps) || 0),
+      distance_meters: acc.distance_meters + (Number(curr.distance_meters) || 0),
+      highly_active_seconds: acc.highly_active_seconds + (Number(curr.highly_active_seconds) || 0),
+      active_seconds: acc.active_seconds + (Number(curr.active_seconds) || 0),
+      sedentary_seconds: acc.sedentary_seconds + (Number(curr.sedentary_seconds) || 0),
+      moderate_intensity_minutes: acc.moderate_intensity_minutes + (Number(curr.moderate_intensity_minutes) || 0),
+      vigorous_intensity_minutes: acc.vigorous_intensity_minutes + (Number(curr.vigorous_intensity_minutes) || 0),
+    }), initialAggregation)
 
     // Get activity count
     const { data: activityStats } = await supabase.rpc('get_daily_activity_stats', {
@@ -79,23 +106,23 @@ async function generateDailySummaries(startDate: string, endDate: string) {
       p_date: date
     })
 
-    // Prepare summary
+    // Prepare summary with non-null values when we have data
     const summary = {
       user_id,
       device_id: '0f96861e-49b1-4aa0-b499-45267084f68c',
       source: 'garmin',
       date,
-      total_calories: dailyActivity?.total_calories || null,
-      active_calories: dailyActivity?.active_calories || null,
-      bmr_calories: dailyActivity?.bmr_calories || null,
-      total_steps: dailyActivity?.steps || null,
-      total_distance_meters: dailyActivity?.distance_meters || null,
-      highly_active_seconds: dailyActivity?.highly_active_seconds || null,
-      active_seconds: dailyActivity?.active_seconds || null,
-      sedentary_seconds: dailyActivity?.sedentary_seconds || null,
+      total_calories: dailyActivity.total_calories || null,
+      active_calories: dailyActivity.active_calories || null,
+      bmr_calories: dailyActivity.bmr_calories || null,
+      total_steps: dailyActivity.steps || null,
+      total_distance_meters: dailyActivity.distance_meters || null,
+      highly_active_seconds: dailyActivity.highly_active_seconds || null,
+      active_seconds: dailyActivity.active_seconds || null,
+      sedentary_seconds: dailyActivity.sedentary_seconds || null,
       sleeping_seconds: sleepStats?.[0]?.total_sleep_seconds || null,
-      moderate_intensity_minutes: dailyActivity?.moderate_intensity_minutes || null,
-      vigorous_intensity_minutes: dailyActivity?.vigorous_intensity_minutes || null,
+      moderate_intensity_minutes: dailyActivity.moderate_intensity_minutes || null,
+      vigorous_intensity_minutes: dailyActivity.vigorous_intensity_minutes || null,
       min_heart_rate: heartRateStats?.[0]?.min_hr || null,
       max_heart_rate: heartRateStats?.[0]?.max_hr || null,
       resting_heart_rate: sleepStats?.[0]?.resting_heart_rate || null,
@@ -105,10 +132,18 @@ async function generateDailySummaries(startDate: string, endDate: string) {
       created_at: new Date().toISOString()
     }
 
+    // Only set fields that have non-zero values
+    const finalSummary = Object.fromEntries(
+      Object.entries(summary).map(([key, value]) => [
+        key,
+        typeof value === 'number' && value === 0 ? null : value
+      ])
+    )
+
     // Insert or update daily summary
     const { error: upsertError } = await supabase
       .from('daily_summaries')
-      .upsert(summary, {
+      .upsert(finalSummary, {
         onConflict: 'user_id,date'
       })
 
