@@ -391,7 +391,7 @@ async function processSleep(userId: string, fileContent: any) {
           const { error: stagesError } = await supabase
             .from('sleep_stages')
             .upsert(sleepStagesRecords, {
-              onConflict: 'user_id,device_id,source,sleep_id,timestamp,stage',
+              onConflict: 'user_id,device_id,source,sleep_id,timestamp',
               ignoreDuplicates: true
             })
 
