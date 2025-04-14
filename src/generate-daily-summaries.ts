@@ -14,10 +14,10 @@ async function generateDailySummaries(startDate: string, endDate: string) {
   // Get all unique user_ids and dates combinations that need processing
   const { data: activities, error: activitiesError } = await supabase
     .from('user_activities')
-    .select('user_id, timestamp')
-    .gte('timestamp', `${startDate}T00:00:00Z`)
-    .lt('timestamp', `${endDate}T23:59:59Z`)
-    .order('timestamp')
+    .select('user_id, created_at')
+    .gte('created_at', `${startDate}T00:00:00Z`)
+    .lt('created_at', `${endDate}T23:59:59Z`)
+    .order('created_at')
 
   if (activitiesError) {
     console.error('Error fetching activities:', activitiesError)
@@ -29,8 +29,8 @@ async function generateDailySummaries(startDate: string, endDate: string) {
   
   // Process each unique user-date combination
   for (const activity of activities || []) {
-    const { user_id, timestamp } = activity
-    const date = new Date(timestamp).toISOString().split('T')[0]
+    const { user_id, created_at } = activity
+    const date = new Date(created_at).toISOString().split('T')[0]
     
     // Skip if we've already processed this user-date combination
     const key = `${user_id}-${date}`
@@ -44,8 +44,8 @@ async function generateDailySummaries(startDate: string, endDate: string) {
       .from('user_activities')
       .select('*')
       .eq('user_id', user_id)
-      .gte('timestamp', `${date}T00:00:00Z`)
-      .lt('timestamp', `${date}T23:59:59Z`)
+      .gte('created_at', `${date}T00:00:00Z`)
+      .lt('created_at', `${date}T23:59:59Z`)
 
     // Aggregate daily activity data
     const dailyActivity = dailyActivities?.reduce((acc, curr) => ({
