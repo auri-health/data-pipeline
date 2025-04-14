@@ -31,6 +31,12 @@ interface GarminActivity {
   [key: string]: any // For additional fields that will go into metadata
 }
 
+interface GarminSleepMovement {
+  startGMT: string
+  endGMT: string
+  activityLevel: number
+}
+
 interface GarminSleep {
   deepSleepSeconds: number
   lightSleepSeconds: number
@@ -207,6 +213,16 @@ async function processSleep(userId: string, fileContent: any) {
       sleepRecords = fileContent.sleepData
     } else if (fileContent.data && Array.isArray(fileContent.data)) {
       sleepRecords = fileContent.data
+    } else if (fileContent.dailySleepDTO) {
+      // Handle the case where sleep data is in dailySleepDTO
+      sleepRecords = [{
+        ...fileContent.dailySleepDTO,
+        movementData: fileContent.sleepMovement?.map((m: GarminSleepMovement) => ({
+          ...m,
+          activityLevel: m.activityLevel,
+          timestamp: m.startGMT
+        }))
+      }]
     } else {
       sleepRecords = [fileContent] // Single record
     }
@@ -311,7 +327,7 @@ async function processSleep(userId: string, fileContent: any) {
 
           const sleepStages = stages.map(({ stage, duration }) => ({
             user_id: userId,
-            device_id: record.deviceId || 'unknown',
+            device_id: '0f96861e-49b1-4aa0-b499-45267084f68c',
             source: 'garmin',
             sleep_id,
             timestamp: startTime.toISOString(),
@@ -331,7 +347,7 @@ async function processSleep(userId: string, fileContent: any) {
               
               return {
                 user_id: userId,
-                device_id: record.deviceId || 'unknown',
+                device_id: '0f96861e-49b1-4aa0-b499-45267084f68c',
                 source: 'garmin',
                 sleep_id,
                 timestamp: movementTime.toISOString(),
