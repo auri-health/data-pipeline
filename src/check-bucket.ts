@@ -454,9 +454,11 @@ async function processSteps(userId: string, fileContent: any) {
   } else if (typeof fileContent === 'number') {
     // Handle case where content is just a single number
     console.log('Steps data is a single number')
+    const today = new Date()
+    const timestamp = today.toISOString() // Use full ISO timestamp
     stepsData = [{
       steps: fileContent,
-      timestamp: new Date().toISOString().split('T')[0] // Use today's date
+      timestamp: timestamp
     }]
   } else {
     console.error('Could not find steps data in expected formats:', Object.keys(fileContent))
@@ -478,7 +480,7 @@ async function processSteps(userId: string, fileContent: any) {
     if (Array.isArray(reading)) {
       return {
         user_id: userId,
-        device_id: fileContent.deviceId || 'unknown',
+        device_id: '0f96861e-49b1-4aa0-b499-45267084f68c',
         source: 'garmin',
         timestamp: new Date(reading[0]).toISOString(),
         steps: reading[1],
@@ -498,7 +500,7 @@ async function processSteps(userId: string, fileContent: any) {
 
     return {
       user_id: userId,
-      device_id: reading.deviceId || fileContent.deviceId || 'unknown',
+      device_id: '0f96861e-49b1-4aa0-b499-45267084f68c',
       source: 'garmin',
       timestamp: new Date(timestamp).toISOString(),
       steps: steps,
@@ -512,19 +514,24 @@ async function processSteps(userId: string, fileContent: any) {
     return
   }
 
-  const { error } = await supabase
-    .from('step_readings')
-    .upsert(stepsReadings, {
-      onConflict: 'user_id,timestamp',
-      ignoreDuplicates: true
-    })
+  try {
+    const { error } = await supabase
+      .from('step_readings')
+      .upsert(stepsReadings, {
+        onConflict: 'user_id,device_id,source,timestamp',
+        ignoreDuplicates: true
+      })
 
-  if (error) {
-    console.error('Error inserting steps:', error)
+    if (error) {
+      console.error('Error inserting steps:', error)
+      throw error
+    }
+
+    console.log(`Imported ${stepsReadings.length} steps readings`)
+  } catch (error) {
+    console.error('Error upserting steps:', error)
     throw error
   }
-
-  console.log(`Imported ${stepsReadings.length} steps readings`)
 }
 
 async function processFile(userId: string, bucketName: string, filePath: string) {
@@ -550,33 +557,39 @@ async function processFile(userId: string, bucketName: string, filePath: string)
     console.log(rawContent)
     console.log('\n=== End raw file content ===')
     
+    let content
     try {
-      const content = JSON.parse(rawContent)
+      content = JSON.parse(rawContent)
       console.log('\n=== Parsed JSON content ===')
       console.log(JSON.stringify(content, null, 2))
       console.log('\n=== End parsed JSON content ===')
-
-      if (filePath.includes('activities-')) {
-        console.log('\nProcessing as activities file...')
-        await processActivities(userId, content)
-      } else if (filePath.includes('heart-rate-')) {
-        console.log('\nProcessing as heart rate file...')
-        await processHeartRates(userId, content)
-      } else if (filePath.includes('sleep-')) {
-        console.log('\nProcessing as sleep file...')
-        await processSleep(userId, content)
-      } else if (filePath.includes('steps-')) {
-        console.log('\nProcessing as steps file...')
-        await processSteps(userId, content)
-      } else {
-        console.warn('Unknown file type, skipping:', filePath)
-      }
     } catch (parseError) {
-      console.error('\nError parsing JSON:')
-      console.error(parseError)
-      console.error('\nRaw content that failed to parse:')
-      console.error(rawContent)
-      throw parseError
+      // If JSON parsing fails but content is a number, use the number
+      if (!isNaN(Number(rawContent))) {
+        content = Number(rawContent)
+        console.log('\n=== Parsed numeric content ===')
+        console.log(content)
+        console.log('\n=== End parsed numeric content ===')
+      } else {
+        console.error('\nError parsing content:', parseError)
+        throw parseError
+      }
+    }
+
+    if (filePath.includes('activities-')) {
+      console.log('\nProcessing as activities file...')
+      await processActivities(userId, content)
+    } else if (filePath.includes('heart-rate-')) {
+      console.log('\nProcessing as heart rate file...')
+      await processHeartRates(userId, content)
+    } else if (filePath.includes('sleep-')) {
+      console.log('\nProcessing as sleep file...')
+      await processSleep(userId, content)
+    } else if (filePath.includes('steps-')) {
+      console.log('\nProcessing as steps file...')
+      await processSteps(userId, content)
+    } else {
+      console.warn('Unknown file type, skipping:', filePath)
     }
   } catch (error) {
     console.error(`\nError processing file ${filePath}:`, error)
