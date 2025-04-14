@@ -6,6 +6,7 @@
   "scripts": {
     "build": "tsc",
     "start": "node dist/import-garmin-data.js",
+    "start:historical": "node dist/import-garmin-data.js --historical",
     "check": "ts-node src/import-garmin-data.ts"
   },
   "dependencies": {

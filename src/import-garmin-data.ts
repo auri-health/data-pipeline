@@ -575,7 +575,7 @@ async function processFile(userId: string, bucketName: string, filePath: string)
   }
 }
 
-async function checkBucketFiles() {
+async function checkBucketFiles(processHistorical: boolean = false) {
   const userId = '7afb527e-a12f-4c78-8dda-bd4e7ae501b1'
   const bucketName = 'garmin-data'
   
@@ -584,7 +584,11 @@ async function checkBucketFiles() {
   const todayStr = today.toISOString().split('T')[0]
   
   try {
-    console.log(`Checking bucket "${bucketName}" for user "${userId}" for date ${todayStr}...`)
+    if (processHistorical) {
+      console.log(`Checking bucket "${bucketName}" for user "${userId}" for all historical data...`)
+    } else {
+      console.log(`Checking bucket "${bucketName}" for user "${userId}" for date ${todayStr}...`)
+    }
     
     const { data, error } = await supabase.storage
       .from(bucketName)
@@ -607,17 +611,18 @@ async function checkBucketFiles() {
       return
     }
 
-    // Filter files for today's data
-    const todayFiles = data.filter(file => file.name.includes(todayStr))
-    console.log(`Found ${todayFiles.length} files for today (${todayStr}):`)
-    todayFiles.forEach(file => console.log(`- ${file.name}`))
+    // Filter files based on mode
+    let filesToProcess = processHistorical ? data : data.filter(file => file.name.includes(todayStr))
     
-    for (const file of todayFiles) {
+    console.log(`Found ${filesToProcess.length} files to process:`)
+    filesToProcess.forEach(file => console.log(`- ${file.name}`))
+    
+    for (const file of filesToProcess) {
       console.log(`\nProcessing ${file.name}...`)
       await processFile(userId, bucketName, `${userId}/${file.name}`)
     }
 
-    console.log('\nAll files for today processed successfully')
+    console.log('\nAll files processed successfully')
   } catch (err: any) {
     console.error('Error processing bucket:', err)
     if (err.message) console.error('Error message:', err.message)
@@ -626,8 +631,12 @@ async function checkBucketFiles() {
   }
 }
 
+// Parse command line arguments
+const args = process.argv.slice(2)
+const processHistorical = args.includes('--historical')
+
 // Run the function
-checkBucketFiles()
+checkBucketFiles(processHistorical)
   .catch(error => {
     console.error('Script failed:', error)
     process.exit(1)
