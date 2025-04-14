@@ -126,15 +126,25 @@ async function generateDailySummaries(startDate: string, endDate: string) {
         console.error(`Error fetching heart rate stats for ${date}:`, heartRateError)
       }
 
+      // Get calorie stats
+      const { data: calorieStats, error: calorieError } = await supabase.rpc('get_daily_calorie_stats', {
+        p_date: date,
+        p_user_id: user_id
+      })
+
+      if (calorieError) {
+        console.error(`Error fetching calorie stats for ${date}:`, calorieError)
+      }
+
       // Prepare summary with non-null values when we have data
       const summary = {
         user_id,
         device_id: '0f96861e-49b1-4aa0-b499-45267084f68c',
         source: 'garmin',
         date,
-        total_calories: dailyActivity.total_calories || null,
-        active_calories: dailyActivity.active_calories || null,
-        bmr_calories: dailyActivity.bmr_calories || null,
+        total_calories: calorieStats?.[0]?.total_calories || null,
+        active_calories: calorieStats?.[0]?.active_calories || null,
+        bmr_calories: calorieStats?.[0]?.bmr_calories || null,
         total_steps: dailyActivity.steps || null,
         total_distance_meters: dailyActivity.distance_meters || null,
         highly_active_seconds: dailyActivity.highly_active_seconds || null,
