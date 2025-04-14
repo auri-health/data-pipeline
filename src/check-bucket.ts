@@ -439,97 +439,58 @@ async function processSleep(userId: string, fileContent: any) {
 async function processSteps(userId: string, fileContent: any) {
   console.log('Processing steps data...')
   
-  // Try different possible structures
-  let stepsData: any[] = []
+  let steps: number
+  let date: string
   
-  if (Array.isArray(fileContent)) {
-    console.log('Steps data is an array')
-    stepsData = fileContent
-  } else if (fileContent.stepsValues) {
-    console.log('Steps data is in stepsValues')
-    stepsData = fileContent.stepsValues
-  } else if (fileContent.data && Array.isArray(fileContent.data)) {
-    console.log('Steps data is in data array')
-    stepsData = fileContent.data
-  } else if (typeof fileContent === 'number') {
-    // Handle case where content is just a single number
+  if (typeof fileContent === 'number') {
     console.log('Steps data is a single number')
-    const today = new Date()
-    const timestamp = today.toISOString() // Use full ISO timestamp
-    stepsData = [{
-      steps: fileContent,
-      timestamp: timestamp
-    }]
+    steps = fileContent
+    date = new Date().toISOString().split('T')[0] // Use just the date part
+  } else if (Array.isArray(fileContent)) {
+    console.log('Steps data is an array')
+    // Take the last entry if it's an array
+    const lastEntry = fileContent[fileContent.length - 1]
+    steps = lastEntry.steps || lastEntry.value || lastEntry[1]
+    date = new Date(lastEntry.timestamp || lastEntry.time || lastEntry[0]).toISOString().split('T')[0]
+  } else if (fileContent.steps || fileContent.value) {
+    steps = fileContent.steps || fileContent.value
+    date = new Date(fileContent.timestamp || fileContent.time || fileContent.date).toISOString().split('T')[0]
   } else {
     console.error('Could not find steps data in expected formats:', Object.keys(fileContent))
     return
   }
 
-  console.log(`Found ${stepsData.length} steps readings`)
-
-  if (stepsData.length === 0) {
-    console.log('No steps readings to import')
+  if (typeof steps !== 'number' || isNaN(steps)) {
+    console.error('Invalid steps value:', steps)
     return
   }
 
-  // Sample the first item to understand the structure
-  console.log('Sample steps reading:', JSON.stringify(stepsData[0], null, 2))
-
-  const stepsReadings = stepsData.map(reading => {
-    // Handle array format [timestamp, value]
-    if (Array.isArray(reading)) {
-      return {
-        user_id: userId,
-        device_id: '0f96861e-49b1-4aa0-b499-45267084f68c',
-        source: 'garmin',
-        timestamp: new Date(reading[0]).toISOString(),
-        steps: reading[1],
-        extracted_at: new Date().toISOString(),
-        created_at: new Date().toISOString()
-      }
-    }
-    
-    // Handle object format
-    const timestamp = reading.startTimeGMT || reading.timestamp || reading.time || reading.date
-    const steps = reading.steps || reading.value || reading.count
-
-    if (!timestamp || typeof steps !== 'number') {
-      console.warn('Invalid steps reading:', reading)
-      return null
-    }
-
-    return {
-      user_id: userId,
-      device_id: '0f96861e-49b1-4aa0-b499-45267084f68c',
-      source: 'garmin',
-      timestamp: new Date(timestamp).toISOString(),
-      steps: steps,
-      extracted_at: new Date().toISOString(),
-      created_at: new Date().toISOString()
-    }
-  }).filter(reading => reading !== null && !isNaN(reading.steps))
-
-  if (stepsReadings.length === 0) {
-    console.log('No valid steps readings to import')
-    return
-  }
+  console.log('Processing daily summary with steps:', { date, steps })
 
   try {
     const { error } = await supabase
-      .from('step_readings')
-      .upsert(stepsReadings, {
-        onConflict: 'user_id,device_id,source,timestamp',
-        ignoreDuplicates: true
+      .from('daily_summaries')
+      .upsert({
+        user_id: userId,
+        device_id: '0f96861e-49b1-4aa0-b499-45267084f68c',
+        source: 'garmin',
+        date,
+        total_steps: steps,
+        extracted_at: new Date().toISOString(),
+        created_at: new Date().toISOString()
+      }, {
+        onConflict: 'user_id,device_id,source,date',
+        ignoreDuplicates: false // We want to update if exists
       })
 
     if (error) {
-      console.error('Error inserting steps:', error)
+      console.error('Error upserting daily summary:', error)
       throw error
     }
 
-    console.log(`Imported ${stepsReadings.length} steps readings`)
+    console.log(`Successfully updated daily summary for ${date} with ${steps} steps`)
   } catch (error) {
-    console.error('Error upserting steps:', error)
+    console.error('Error processing daily summary:', error)
     throw error
   }
 }
