@@ -33,3 +33,36 @@ BEGIN
   GROUP BY hr.user_id, DATE(hr.timestamp);
 END;
 $$ LANGUAGE plpgsql;
+
+-- Function to get daily calorie statistics
+CREATE OR REPLACE FUNCTION get_daily_calorie_stats(p_date DATE, p_user_id UUID)
+RETURNS TABLE (
+  total_calories INTEGER,
+  active_calories INTEGER,
+  bmr_calories INTEGER
+) AS $$
+BEGIN
+  RETURN QUERY
+  WITH activity_calories AS (
+    SELECT 
+      SUM(ua.active_calories)::INTEGER as active_calories
+    FROM user_activities ua
+    WHERE ua.user_id = p_user_id
+      AND DATE(ua.start_time) = p_date
+  ),
+  daily_bmr AS (
+    SELECT 
+      ds.bmr_calories::INTEGER as bmr_calories
+    FROM daily_summaries ds
+    WHERE ds.user_id = p_user_id
+      AND ds.date = p_date
+    LIMIT 1
+  )
+  SELECT 
+    (COALESCE(ac.active_calories, 0) + COALESCE(db.bmr_calories, 0))::INTEGER as total_calories,
+    COALESCE(ac.active_calories, 0)::INTEGER as active_calories,
+    COALESCE(db.bmr_calories, 0)::INTEGER as bmr_calories
+  FROM activity_calories ac
+  CROSS JOIN daily_bmr db;
+END;
+$$ LANGUAGE plpgsql;
