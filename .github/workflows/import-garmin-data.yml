@@ -1,4 +1,4 @@
-name: Check Supabase Bucket
+name: Import Garmin Data
 
 on:
   workflow_dispatch:  # Manual trigger
@@ -6,7 +6,7 @@ on:
     - cron: '15 10,18,2 * * *'  # Run at 10:15am, 6:15pm, and 2:15am UTC
 
 jobs:
-  check-bucket:
+  import-garmin-data:
     runs-on: ubuntu-latest
 
     env:
