@@ -1,5 +1,5 @@
 -- Function to get daily sleep statistics
-CREATE OR REPLACE FUNCTION get_daily_sleep_stats(p_user_id UUID, p_date DATE)
+CREATE OR REPLACE FUNCTION get_daily_sleep_stats(p_date DATE, p_user_id UUID)
 RETURNS TABLE (
   total_sleep_seconds BIGINT,
   resting_heart_rate INTEGER
@@ -7,17 +7,17 @@ RETURNS TABLE (
 BEGIN
   RETURN QUERY
   SELECT 
-    SUM(duration_seconds)::BIGINT as total_sleep_seconds,
-    AVG(resting_heart_rate)::INTEGER as resting_heart_rate
-  FROM sleep_stages
-  WHERE user_id = p_user_id
-    AND DATE(timestamp) = p_date
-  GROUP BY user_id, DATE(timestamp);
+    SUM(ss.duration_seconds)::BIGINT as total_sleep_seconds,
+    AVG(ss.resting_heart_rate)::INTEGER as resting_heart_rate
+  FROM sleep_stages ss
+  WHERE ss.user_id = p_user_id
+    AND DATE(ss.timestamp) = p_date
+  GROUP BY ss.user_id, DATE(ss.timestamp);
 END;
 $$ LANGUAGE plpgsql;
 
 -- Function to get daily heart rate statistics
-CREATE OR REPLACE FUNCTION get_daily_heart_rate_stats(p_user_id UUID, p_date DATE)
+CREATE OR REPLACE FUNCTION get_daily_heart_rate_stats(p_date DATE, p_user_id UUID)
 RETURNS TABLE (
   min_hr INTEGER,
   max_hr INTEGER
@@ -25,11 +25,11 @@ RETURNS TABLE (
 BEGIN
   RETURN QUERY
   SELECT 
-    MIN(heart_rate)::INTEGER as min_hr,
-    MAX(heart_rate)::INTEGER as max_hr
-  FROM heart_rate_readings
-  WHERE user_id = p_user_id
-    AND DATE(timestamp) = p_date
-  GROUP BY user_id, DATE(timestamp);
+    MIN(hr.heart_rate)::INTEGER as min_hr,
+    MAX(hr.heart_rate)::INTEGER as max_hr
+  FROM heart_rate_readings hr
+  WHERE hr.user_id = p_user_id
+    AND DATE(hr.timestamp) = p_date
+  GROUP BY hr.user_id, DATE(hr.timestamp);
 END;
-$$ LANGUAGE plpgsql; 
+$$ LANGUAGE plpgsql;
