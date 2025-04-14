@@ -108,8 +108,8 @@ async function generateDailySummaries(startDate: string, endDate: string) {
 
       // Get aggregated sleep data
       const { data: sleepStats, error: sleepError } = await supabase.rpc('get_daily_sleep_stats', {
-        p_user_id: user_id,
-        p_date: date
+        p_date: date,
+        p_user_id: user_id
       })
 
       if (sleepError) {
@@ -118,8 +118,8 @@ async function generateDailySummaries(startDate: string, endDate: string) {
 
       // Get heart rate stats
       const { data: heartRateStats, error: heartRateError } = await supabase.rpc('get_daily_heart_rate_stats', {
-        p_user_id: user_id,
-        p_date: date
+        p_date: date,
+        p_user_id: user_id
       })
 
       if (heartRateError) {
