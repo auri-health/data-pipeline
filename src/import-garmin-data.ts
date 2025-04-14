@@ -238,7 +238,11 @@ async function processSleep(userId: string, fileContent: any) {
           ...m,
           activityLevel: m.activityLevel,
           timestamp: m.startGMT
-        }))
+        })),
+        sleepLevels: fileContent.sleepLevels,
+        sleepHeartRate: fileContent.sleepHeartRate,
+        restingHeartRate: fileContent.restingHeartRate,
+        skinTempDataExists: fileContent.skinTempDataExists
       }]
     } else {
       sleepRecords = [fileContent] // Single record
@@ -255,6 +259,8 @@ async function processSleep(userId: string, fileContent: any) {
       const batch = sleepRecords.slice(i, i + BATCH_SIZE)
       const sleepStagesRecords = []
       const sleepMovementsRecords = []
+      const sleepLevelsRecords = []
+      const sleepHeartRatesRecords = []
       
       for (const record of batch) {
         try {
@@ -365,6 +371,8 @@ async function processSleep(userId: string, fileContent: any) {
             timestamp: startTime.toISOString(),
             stage,
             duration_seconds: duration,
+            resting_heart_rate: record.restingHeartRate || null,
+            has_skin_temp_data: record.skinTempDataExists || false,
             extracted_at: new Date().toISOString(),
             created_at: new Date().toISOString()
           }))
@@ -391,6 +399,37 @@ async function processSleep(userId: string, fileContent: any) {
               }
             })
             sleepMovementsRecords.push(...movements)
+          }
+
+          // Process sleep levels timeseries if available
+          if (record.sleepLevels && Array.isArray(record.sleepLevels)) {
+            const levels = record.sleepLevels.map((level: any) => ({
+              user_id: userId,
+              device_id: '0f96861e-49b1-4aa0-b499-45267084f68c',
+              source: 'garmin',
+              sleep_id,
+              start_time: new Date(level.startGMT).toISOString(),
+              end_time: new Date(level.endGMT).toISOString(),
+              activity_level: level.activityLevel,
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString()
+            }))
+            sleepLevelsRecords.push(...levels)
+          }
+
+          // Process sleep heart rate timeseries if available
+          if (record.sleepHeartRate && Array.isArray(record.sleepHeartRate)) {
+            const heartRates = record.sleepHeartRate.map((hr: any) => ({
+              user_id: userId,
+              device_id: '0f96861e-49b1-4aa0-b499-45267084f68c',
+              source: 'garmin',
+              sleep_id,
+              timestamp: new Date(hr.startGMT).toISOString(),
+              heart_rate: hr.value,
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString()
+            }))
+            sleepHeartRatesRecords.push(...heartRates)
           }
 
           sleepStagesRecords.push(...sleepStages)
@@ -439,6 +478,46 @@ async function processSleep(userId: string, fileContent: any) {
           }
         } catch (error) {
           console.error(`${logPrefix} Error upserting sleep movements:`, error)
+        }
+      }
+
+      // Insert sleep levels
+      if (sleepLevelsRecords.length > 0) {
+        try {
+          const { error: levelsError } = await supabase
+            .from('sleep_levels')
+            .upsert(sleepLevelsRecords, {
+              onConflict: 'user_id,device_id,source,sleep_id,start_time',
+              ignoreDuplicates: true
+            })
+
+          if (levelsError) {
+            console.error(`${logPrefix} Error inserting sleep levels:`, levelsError)
+          } else {
+            console.log(`${logPrefix} Successfully inserted ${sleepLevelsRecords.length} sleep levels`)
+          }
+        } catch (error) {
+          console.error(`${logPrefix} Error upserting sleep levels:`, error)
+        }
+      }
+
+      // Insert sleep heart rates
+      if (sleepHeartRatesRecords.length > 0) {
+        try {
+          const { error: heartRatesError } = await supabase
+            .from('sleep_heart_rates')
+            .upsert(sleepHeartRatesRecords, {
+              onConflict: 'user_id,device_id,source,sleep_id,timestamp',
+              ignoreDuplicates: true
+            })
+
+          if (heartRatesError) {
+            console.error(`${logPrefix} Error inserting sleep heart rates:`, heartRatesError)
+          } else {
+            console.log(`${logPrefix} Successfully inserted ${sleepHeartRatesRecords.length} sleep heart rates`)
+          }
+        } catch (error) {
+          console.error(`${logPrefix} Error upserting sleep heart rates:`, error)
         }
       }
     }
