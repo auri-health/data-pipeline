@@ -27,10 +27,10 @@ async function generateDailySummaries(startDate: string, endDate: string) {
   // Get all unique user_ids and dates combinations that need processing
   const { data: activities, error: activitiesError } = await supabase
     .from('user_activities')
-    .select('user_id, created_at')
-    .gte('created_at', `${startDate}T00:00:00Z`)
-    .lt('created_at', `${endDate}T23:59:59Z`)
-    .order('created_at')
+    .select('user_id, start_time')
+    .gte('start_time', `${startDate}T00:00:00Z`)
+    .lt('start_time', `${endDate}T23:59:59Z`)
+    .order('start_time')
 
   if (activitiesError) {
     console.error('Error fetching activities:', activitiesError)
@@ -42,8 +42,8 @@ async function generateDailySummaries(startDate: string, endDate: string) {
   
   // Process each unique user-date combination
   for (const activity of activities || []) {
-    const { user_id, created_at } = activity
-    const date = new Date(created_at).toISOString().split('T')[0]
+    const { user_id, start_time } = activity
+    const date = new Date(start_time).toISOString().split('T')[0]
     
     // Skip if we've already processed this user-date combination
     const key = `${user_id}-${date}`
@@ -52,105 +52,128 @@ async function generateDailySummaries(startDate: string, endDate: string) {
 
     console.log(`Processing user ${user_id} for date ${date}`)
 
-    // Get activity data for the day
-    const { data: dailyActivities } = await supabase
-      .from('user_activities')
-      .select('*')
-      .eq('user_id', user_id)
-      .gte('created_at', `${date}T00:00:00Z`)
-      .lt('created_at', `${date}T23:59:59Z`)
+    try {
+      // Get activity data for the day
+      const { data: dailyActivities, error: dailyActivitiesError } = await supabase
+        .from('user_activities')
+        .select('*')
+        .eq('user_id', user_id)
+        .gte('start_time', `${date}T00:00:00Z`)
+        .lt('start_time', `${date}T23:59:59Z`)
 
-    // Initialize aggregation with default values
-    const initialAggregation: DailyActivityAggregation = {
-      total_calories: 0,
-      active_calories: 0,
-      bmr_calories: 0,
-      steps: 0,
-      distance_meters: 0,
-      highly_active_seconds: 0,
-      active_seconds: 0,
-      sedentary_seconds: 0,
-      moderate_intensity_minutes: 0,
-      vigorous_intensity_minutes: 0
-    }
+      if (dailyActivitiesError) {
+        console.error(`Error fetching daily activities for ${date}:`, dailyActivitiesError)
+        continue
+      }
 
-    // Aggregate daily activity data with proper number conversion
-    const dailyActivity = dailyActivities?.reduce((acc, curr) => ({
-      total_calories: acc.total_calories + (Number(curr.total_calories) || 0),
-      active_calories: acc.active_calories + (Number(curr.active_calories) || 0),
-      bmr_calories: Number(curr.bmr_calories) || acc.bmr_calories,
-      steps: acc.steps + (Number(curr.steps) || 0),
-      distance_meters: acc.distance_meters + (Number(curr.distance_meters) || 0),
-      highly_active_seconds: acc.highly_active_seconds + (Number(curr.highly_active_seconds) || 0),
-      active_seconds: acc.active_seconds + (Number(curr.active_seconds) || 0),
-      sedentary_seconds: acc.sedentary_seconds + (Number(curr.sedentary_seconds) || 0),
-      moderate_intensity_minutes: acc.moderate_intensity_minutes + (Number(curr.moderate_intensity_minutes) || 0),
-      vigorous_intensity_minutes: acc.vigorous_intensity_minutes + (Number(curr.vigorous_intensity_minutes) || 0),
-    }), initialAggregation)
+      // Count distinct activities
+      const distinctActivities = new Set(dailyActivities?.map(a => a.activity_id) || [])
+      const activityCount = distinctActivities.size
 
-    // Get activity count
-    const { data: activityStats } = await supabase.rpc('get_daily_activity_stats', {
-      p_user_id: user_id,
-      p_date: date
-    })
+      // Initialize aggregation with default values
+      const initialAggregation: DailyActivityAggregation = {
+        total_calories: 0,
+        active_calories: 0,
+        bmr_calories: 0,
+        steps: 0,
+        distance_meters: 0,
+        highly_active_seconds: 0,
+        active_seconds: 0,
+        sedentary_seconds: 0,
+        moderate_intensity_minutes: 0,
+        vigorous_intensity_minutes: 0
+      }
 
-    // Get aggregated sleep data
-    const { data: sleepStats } = await supabase.rpc('get_daily_sleep_stats', {
-      p_user_id: user_id,
-      p_date: date
-    })
+      // Aggregate daily activity data with proper number conversion and validation
+      const dailyActivity = dailyActivities?.reduce((acc, curr) => {
+        // Helper function to safely convert to number
+        const toNumber = (value: any) => {
+          const num = Number(value)
+          return isNaN(num) ? 0 : num
+        }
 
-    // Get heart rate stats
-    const { data: heartRateStats } = await supabase.rpc('get_daily_heart_rate_stats', {
-      p_user_id: user_id,
-      p_date: date
-    })
+        return {
+          total_calories: acc.total_calories + toNumber(curr.total_calories),
+          active_calories: acc.active_calories + toNumber(curr.active_calories),
+          bmr_calories: toNumber(curr.bmr_calories) || acc.bmr_calories,
+          steps: acc.steps + toNumber(curr.steps),
+          distance_meters: acc.distance_meters + toNumber(curr.distance_meters),
+          highly_active_seconds: acc.highly_active_seconds + toNumber(curr.highly_active_seconds),
+          active_seconds: acc.active_seconds + toNumber(curr.active_seconds),
+          sedentary_seconds: acc.sedentary_seconds + toNumber(curr.sedentary_seconds),
+          moderate_intensity_minutes: acc.moderate_intensity_minutes + toNumber(curr.moderate_intensity_minutes),
+          vigorous_intensity_minutes: acc.vigorous_intensity_minutes + toNumber(curr.vigorous_intensity_minutes),
+        }
+      }, initialAggregation) || initialAggregation
 
-    // Prepare summary with non-null values when we have data
-    const summary = {
-      user_id,
-      device_id: '0f96861e-49b1-4aa0-b499-45267084f68c',
-      source: 'garmin',
-      date,
-      total_calories: dailyActivity.total_calories || null,
-      active_calories: dailyActivity.active_calories || null,
-      bmr_calories: dailyActivity.bmr_calories || null,
-      total_steps: dailyActivity.steps || null,
-      total_distance_meters: dailyActivity.distance_meters || null,
-      highly_active_seconds: dailyActivity.highly_active_seconds || null,
-      active_seconds: dailyActivity.active_seconds || null,
-      sedentary_seconds: dailyActivity.sedentary_seconds || null,
-      sleeping_seconds: sleepStats?.[0]?.total_sleep_seconds || null,
-      moderate_intensity_minutes: dailyActivity.moderate_intensity_minutes || null,
-      vigorous_intensity_minutes: dailyActivity.vigorous_intensity_minutes || null,
-      min_heart_rate: heartRateStats?.[0]?.min_hr || null,
-      max_heart_rate: heartRateStats?.[0]?.max_hr || null,
-      resting_heart_rate: sleepStats?.[0]?.resting_heart_rate || null,
-      activity_count: activityStats?.[0]?.activity_count || 0,
-      avg_stress_level: null, // TODO: Add stress level data when available
-      extracted_at: new Date().toISOString(),
-      created_at: new Date().toISOString()
-    }
-
-    // Only set fields that have non-zero values
-    const finalSummary = Object.fromEntries(
-      Object.entries(summary).map(([key, value]) => [
-        key,
-        typeof value === 'number' && value === 0 ? null : value
-      ])
-    )
-
-    // Insert or update daily summary
-    const { error: upsertError } = await supabase
-      .from('daily_summaries')
-      .upsert(finalSummary, {
-        onConflict: 'user_id,date'
+      // Get aggregated sleep data
+      const { data: sleepStats, error: sleepError } = await supabase.rpc('get_daily_sleep_stats', {
+        p_user_id: user_id,
+        p_date: date
       })
 
-    if (upsertError) {
-      console.error(`Error upserting summary for ${date}:`, upsertError)
-    } else {
-      console.log(`Successfully processed ${date}`)
+      if (sleepError) {
+        console.error(`Error fetching sleep stats for ${date}:`, sleepError)
+      }
+
+      // Get heart rate stats
+      const { data: heartRateStats, error: heartRateError } = await supabase.rpc('get_daily_heart_rate_stats', {
+        p_user_id: user_id,
+        p_date: date
+      })
+
+      if (heartRateError) {
+        console.error(`Error fetching heart rate stats for ${date}:`, heartRateError)
+      }
+
+      // Prepare summary with non-null values when we have data
+      const summary = {
+        user_id,
+        device_id: '0f96861e-49b1-4aa0-b499-45267084f68c',
+        source: 'garmin',
+        date,
+        total_calories: dailyActivity.total_calories || null,
+        active_calories: dailyActivity.active_calories || null,
+        bmr_calories: dailyActivity.bmr_calories || null,
+        total_steps: dailyActivity.steps || null,
+        total_distance_meters: dailyActivity.distance_meters || null,
+        highly_active_seconds: dailyActivity.highly_active_seconds || null,
+        active_seconds: dailyActivity.active_seconds || null,
+        sedentary_seconds: dailyActivity.sedentary_seconds || null,
+        sleeping_seconds: sleepStats?.[0]?.total_sleep_seconds || null,
+        moderate_intensity_minutes: dailyActivity.moderate_intensity_minutes || null,
+        vigorous_intensity_minutes: dailyActivity.vigorous_intensity_minutes || null,
+        min_heart_rate: heartRateStats?.[0]?.min_hr || null,
+        max_heart_rate: heartRateStats?.[0]?.max_hr || null,
+        resting_heart_rate: sleepStats?.[0]?.resting_heart_rate || null,
+        activity_count: activityCount || null,
+        avg_stress_level: null, // TODO: Add stress level data when available
+        extracted_at: new Date().toISOString(),
+        created_at: new Date().toISOString()
+      }
+
+      // Only set fields that have non-zero values
+      const finalSummary = Object.fromEntries(
+        Object.entries(summary).map(([key, value]) => [
+          key,
+          typeof value === 'number' && value === 0 ? null : value
+        ])
+      )
+
+      // Insert or update daily summary
+      const { error: upsertError } = await supabase
+        .from('daily_summaries')
+        .upsert(finalSummary, {
+          onConflict: 'user_id,date'
+        })
+
+      if (upsertError) {
+        console.error(`Error upserting summary for ${date}:`, upsertError)
+      } else {
+        console.log(`Successfully processed ${date} with ${activityCount} activities`)
+      }
+    } catch (error) {
+      console.error(`Error processing date ${date}:`, error)
     }
   }
 }
