@@ -81,7 +81,8 @@ async function generateDailySummaries(startDate: string, endDate: string) {
         avg_stress_level: summary.averageStressLevel,
         activity_count: null, // No longer available in new format
         extracted_at: new Date().toISOString(),
-        created_at: new Date().toISOString()
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
       }
 
       // Only set fields that have non-null values
