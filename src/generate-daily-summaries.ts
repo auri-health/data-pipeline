@@ -41,17 +41,21 @@ async function generateDailySummaries(startDate: string, endDate: string) {
   
   for (let date = start; date <= end; date.setDate(date.getDate() + 1)) {
     const dateStr = date.toISOString().split('T')[0]
-    const fileName = `user_summary_${dateStr}.json`
     
     try {
-      // Read the JSON file for this date
-      const filePath = path.join(process.env.DATA_DIR || 'data', fileName)
-      if (!fs.existsSync(filePath)) {
+      // Get the file from Supabase storage
+      const { data, error } = await supabase
+        .storage
+        .from('garmin-data')
+        .download(`7afb527e-a12f-4c78-8dda-bd4e7ae501b1/user_summary_${dateStr}.json`)
+
+      if (error) {
         console.log(`No data file found for ${dateStr}`)
         continue
       }
 
-      const fileContent = fs.readFileSync(filePath, 'utf-8')
+      // Convert the downloaded blob to JSON
+      const fileContent = await data.text()
       const summary: UserSummary = JSON.parse(fileContent)
 
       // Prepare summary for database
@@ -97,12 +101,6 @@ async function generateDailySummaries(startDate: string, endDate: string) {
       } else {
         console.log(`Successfully processed ${dateStr}`)
       }
-
-      // Archive processed file
-      const archivePath = path.join(process.env.ARCHIVE_DIR || 'archive', fileName)
-      fs.mkdirSync(path.dirname(archivePath), { recursive: true })
-      fs.renameSync(filePath, archivePath)
-      
     } catch (error) {
       console.error(`Error processing date ${dateStr}:`, error)
     }

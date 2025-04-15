@@ -12,8 +12,6 @@ jobs:
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
       SUPABASE_PROJECT_ID: ${{ secrets.SUPABASE_PROJECT_ID }}
-      DATA_DIR: './data'
-      ARCHIVE_DIR: './archive'
 
     steps:
       - uses: actions/checkout@v4
@@ -27,17 +25,6 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Create directories
-        run: |
-          mkdir -p ${{ env.DATA_DIR }}
-          mkdir -p ${{ env.ARCHIVE_DIR }}
-
-      - name: Download JSON files from bucket
-        run: |
-          # TODO: Add command to download JSON files from your storage bucket
-          # Example using AWS S3:
-          # aws s3 sync s3://your-bucket/user-summaries/ ${{ env.DATA_DIR }}
-
       - name: Generate summaries for last 7 days
         run: |
           # Calculate dates
@@ -45,10 +32,4 @@ jobs:
           START_DATE=$(date -u -d "7 days ago" +%Y-%m-%d)
           
           # Run the script
-          npx ts-node src/generate-daily-summaries.ts "$START_DATE" "$END_DATE"
-
-      - name: Upload processed files to archive
-        run: |
-          # TODO: Add command to upload processed files to your archive storage
-          # Example using AWS S3:
-          # aws s3 sync ${{ env.ARCHIVE_DIR }} s3://your-bucket/processed-summaries/ 
+          npx ts-node src/generate-daily-summaries.ts "$START_DATE" "$END_DATE" 
