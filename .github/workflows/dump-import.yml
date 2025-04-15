@@ -7,6 +7,14 @@ on:
         description: 'User ID to import data for'
         required: true
         type: string
+      start_date:
+        description: 'Start date (YYYY-MM-DD)'
+        required: false
+        type: string
+      end_date:
+        description: 'End date (YYYY-MM-DD)'
+        required: false
+        type: string
 
 jobs:
   dump-import:
@@ -33,4 +41,23 @@ jobs:
         run: npm run build
 
       - name: Bulk import user data
-        run: npm run start:dump 
+        id: import
+        run: npm run start:dump
+
+      - name: Generate daily summaries
+        if: success() && steps.import.outcome == 'success'
+        run: |
+          # Use input dates if provided, otherwise use last 30 days
+          END_DATE="${{ github.event.inputs.end_date }}"
+          START_DATE="${{ github.event.inputs.start_date }}"
+          
+          if [ -z "$END_DATE" ]; then
+            END_DATE=$(date -u +%Y-%m-%d)
+          fi
+          
+          if [ -z "$START_DATE" ]; then
+            START_DATE=$(date -u -d "30 days ago" +%Y-%m-%d)
+          fi
+          
+          # Run the script
+          npx ts-node src/generate-daily-summaries.ts "$START_DATE" "$END_DATE" 

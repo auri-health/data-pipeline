@@ -28,5 +28,16 @@ jobs:
       - name: Build TypeScript
         run: npm run build
 
-      - name: Check bucket contents
-        run: npm start 
+      - name: Import Garmin data
+        id: import
+        run: npm start
+
+      - name: Generate daily summaries
+        if: success() && steps.import.outcome == 'success'
+        run: |
+          # Calculate dates for the last day (since this runs multiple times per day)
+          END_DATE=$(date -u +%Y-%m-%d)
+          START_DATE=$(date -u -d "1 day ago" +%Y-%m-%d)
+          
+          # Run the script
+          npx ts-node src/generate-daily-summaries.ts "$START_DATE" "$END_DATE" 
