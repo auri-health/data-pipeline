@@ -1,7 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
 import dotenv from 'dotenv'
-import fs from 'fs'
-import path from 'path'
 
 dotenv.config()
 
@@ -9,6 +7,8 @@ const supabase = createClient(
   process.env.SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 )
+
+const USER_UUID = '7afb527e-a12f-4c78-8dda-bd4e7ae501b1'
 
 interface UserSummary {
   userProfileId: number;
@@ -47,7 +47,7 @@ async function generateDailySummaries(startDate: string, endDate: string) {
       const { data, error } = await supabase
         .storage
         .from('garmin-data')
-        .download(`7afb527e-a12f-4c78-8dda-bd4e7ae501b1/user_summary_${dateStr}.json`)
+        .download(`${USER_UUID}/user_summary_${dateStr}.json`)
 
       if (error) {
         console.log(`No data file found for ${dateStr}`)
@@ -60,7 +60,7 @@ async function generateDailySummaries(startDate: string, endDate: string) {
 
       // Prepare summary for database
       const dbSummary = {
-        user_id: summary.userProfileId.toString(), // Convert to string as it's UUID in DB
+        user_id: USER_UUID,
         device_id: summary.uuid,
         source: summary.source.toLowerCase(),
         date: summary.calendarDate,
