@@ -567,19 +567,38 @@ async function processSteps(userId: string, fileContent: any) {
   console.log('Processing daily summary with steps:', { date, steps })
 
   try {
+    // First, get existing summary for the day
+    const { data: existingSummary } = await supabase
+      .from('daily_summaries')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('date', date)
+      .single()
+
+    const summaryData = {
+      user_id: userId,
+      device_id: '0f96861e-49b1-4aa0-b499-45267084f68c',
+      source: 'garmin',
+      date,
+      total_steps: steps,
+      extracted_at: new Date().toISOString(),
+      created_at: existingSummary?.created_at || new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    }
+
+    // If summary exists, merge with existing data
+    if (existingSummary) {
+      Object.assign(summaryData, {
+        ...existingSummary,
+        total_steps: steps,
+        updated_at: new Date().toISOString()
+      })
+    }
+
     const { error } = await supabase
       .from('daily_summaries')
-      .upsert({
-        user_id: userId,
-        device_id: '0f96861e-49b1-4aa0-b499-45267084f68c',
-        source: 'garmin',
-        date,
-        total_steps: steps,
-        extracted_at: new Date().toISOString(),
-        created_at: new Date().toISOString()
-      }, {
-        onConflict: 'user_id,device_id,source,date',
-        ignoreDuplicates: false // We want to update if exists
+      .upsert(summaryData, {
+        onConflict: 'user_id,date'
       })
 
     if (error) {
