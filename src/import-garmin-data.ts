@@ -250,6 +250,43 @@ async function processSleep(userId: string, fileContent: any) {
 
     console.log(`${logPrefix} Found ${sleepRecords.length} sleep records`)
     
+    // --- NEW: Aggregate sleep by wake-up date (local date of sleepEndTimestampLocal) ---
+    const sleepByWakeupDate: { [date: string]: any } = {};
+    for (const record of sleepRecords) {
+      // Use sleepEndTimestampLocal for wake-up date attribution
+      const endTimestamp = record.sleepEndTimestampLocal || record.sleepEndTimestampGMT || record.sleepEndTimestamp || null;
+      if (!endTimestamp) continue;
+      const wakeupDate = new Date(endTimestamp).toISOString().split('T')[0];
+      if (!sleepByWakeupDate[wakeupDate]) {
+        sleepByWakeupDate[wakeupDate] = {
+          totalSleepSeconds: 0,
+          deepSleepSeconds: 0,
+          lightSleepSeconds: 0,
+          remSleepSeconds: 0,
+          awakeSleepSeconds: 0,
+          napTimeSeconds: 0,
+          sleepRecords: [],
+          restingHeartRate: null,
+          user_id: userId,
+          date: wakeupDate,
+          extracted_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        };
+      }
+      sleepByWakeupDate[wakeupDate].totalSleepSeconds += record.sleepTimeSeconds || 0;
+      sleepByWakeupDate[wakeupDate].deepSleepSeconds += record.deepSleepSeconds || 0;
+      sleepByWakeupDate[wakeupDate].lightSleepSeconds += record.lightSleepSeconds || 0;
+      sleepByWakeupDate[wakeupDate].remSleepSeconds += record.remSleepSeconds || 0;
+      sleepByWakeupDate[wakeupDate].awakeSleepSeconds += record.awakeSleepSeconds || 0;
+      sleepByWakeupDate[wakeupDate].napTimeSeconds += record.napTimeSeconds || 0;
+      if (record.restingHeartRate && !sleepByWakeupDate[wakeupDate].restingHeartRate) {
+        sleepByWakeupDate[wakeupDate].restingHeartRate = record.restingHeartRate;
+      }
+      sleepByWakeupDate[wakeupDate].sleepRecords.push(record);
+    }
+
+    // --- END NEW ---
+
     // Process in batches of 50 records
     const BATCH_SIZE = 50
     let successCount = 0
@@ -525,6 +562,31 @@ async function processSleep(userId: string, fileContent: any) {
       }
     }
 
+    // --- NEW: Upsert daily sleep summary by wake-up date ---
+    for (const [wakeupDate, summary] of Object.entries(sleepByWakeupDate)) {
+      // Upsert into daily_summaries, updating only sleeping_seconds and timestamps
+      const summaryData = {
+        user_id: userId,
+        date: wakeupDate,
+        sleeping_seconds: summary.totalSleepSeconds,
+        extracted_at: summary.extracted_at,
+        updated_at: new Date().toISOString(),
+      };
+      try {
+        const { error: upsertError } = await supabase
+          .from('daily_summaries')
+          .upsert(summaryData, { onConflict: 'user_id,date' });
+        if (upsertError) {
+          console.error(`${logPrefix} Error upserting daily summary (sleeping_seconds) for ${wakeupDate}:`, upsertError);
+        } else {
+          console.log(`${logPrefix} Successfully upserted daily summary (sleeping_seconds) for ${wakeupDate}`);
+        }
+      } catch (error) {
+        console.error(`${logPrefix} Error upserting daily summary (sleeping_seconds) for ${wakeupDate}:`, error);
+      }
+    }
+    // --- END NEW ---
+
     return {
       success: successCount > 0,
       message: `Processed ${successCount} sleep records with ${failedRecords} failures`
@@ -691,29 +753,43 @@ async function checkBucketFiles(processHistorical: boolean = false) {
       console.log(`Checking bucket "${bucketName}" for user "${userId}" for date ${todayStr}...`)
     }
     
-    const { data, error } = await supabase.storage
-      .from(bucketName)
-      .list(userId, {
-        limit: 100,
-        offset: 0,
-        sortBy: { column: 'name', order: 'asc' }
-      })
+    let allFiles = []
+    let offset = 0
+    const PAGE_SIZE = 1000
+    
+    // Paginate through all files
+    while (true) {
+      const { data, error } = await supabase.storage
+        .from(bucketName)
+        .list(userId, {
+          limit: PAGE_SIZE,
+          offset: offset,
+          sortBy: { column: 'name', order: 'asc' }
+        })
 
-    if (error) {
-      console.error('Storage API Error:', error)
-      throw error
-    }
+      if (error) {
+        console.error('Storage API Error:', error)
+        throw error
+      }
 
-    if (!data || data.length === 0) {
-      console.log('No files found. This could mean:')
-      console.log('1. The bucket is empty')
-      console.log('2. The user folder does not exist')
-      console.log('3. Permissions are not configured correctly')
-      return
+      if (!data || data.length === 0) {
+        if (offset === 0) {
+          console.log('No files found. This could mean:')
+          console.log('1. The bucket is empty')
+          console.log('2. The user folder does not exist')
+          console.log('3. Permissions are not configured correctly')
+          return
+        }
+        break // No more files to process
+      }
+
+      allFiles.push(...data)
+      if (data.length < PAGE_SIZE) break // Last page
+      offset += PAGE_SIZE
     }
 
     // Filter files based on mode
-    let filesToProcess = processHistorical ? data : data.filter(file => file.name.includes(todayStr))
+    let filesToProcess = processHistorical ? allFiles : allFiles.filter(file => file.name.includes(todayStr))
     
     console.log(`Found ${filesToProcess.length} files to process:`)
     filesToProcess.forEach(file => console.log(`- ${file.name}`))
