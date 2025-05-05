@@ -656,9 +656,6 @@ async function processSteps(userId: string, fileContent: any) {
         total_steps: steps,
         updated_at: new Date().toISOString()
       })
-      if ('sleeping_seconds' in summaryData) {
-        delete (summaryData as any).sleeping_seconds;
-      }
     }
 
     const { error } = await supabase
