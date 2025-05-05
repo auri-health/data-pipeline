@@ -270,6 +270,7 @@ async function processSleep(userId: string, fileContent: any) {
       // Only use sleepTimeSeconds for aggregation
       sleepByWakeupDate[wakeupDate].totalSleepSeconds += record.sleepTimeSeconds || 0;
       sleepByWakeupDate[wakeupDate].sleepRecords.push(record);
+      console.log(`[DEBUG] sleepTimeSeconds for record ending ${wakeupDate}:`, record.sleepTimeSeconds);
     }
     // --- END NEW ---
 
@@ -552,6 +553,7 @@ async function processSleep(userId: string, fileContent: any) {
     for (const [wakeupDate, summary] of Object.entries(sleepByWakeupDate)) {
       // Debug print
       console.log(`[DEBUG] Upserting sleeping_seconds for ${wakeupDate}:`, summary.totalSleepSeconds);
+      console.log('Records for', wakeupDate, ':', sleepByWakeupDate[wakeupDate].sleepRecords);
       // Upsert into daily_summaries, updating only sleeping_seconds and timestamps
       const summaryData = {
         user_id: userId,
