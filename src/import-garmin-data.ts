@@ -213,7 +213,7 @@ async function processHeartRates(userId: string, fileContent: any) {
   console.log(`Imported ${heartRates.length} heart rate readings`)
 }
 
-async function processSleep(userId: string, fileContent: any) {
+async function processSleep(userId: string, fileContent: any, filename: string) {
   const logPrefix = '[SLEEP_PROCESSOR]'
   console.log(`${logPrefix} Starting sleep data processing...`)
   
@@ -549,32 +549,31 @@ async function processSleep(userId: string, fileContent: any) {
       }
     }
 
-    // --- NEW: Upsert daily sleep summary by wake-up date ---
-    for (const [wakeupDate, summary] of Object.entries(sleepByWakeupDate)) {
-      // Debug print
-      console.log(`[DEBUG] Upserting sleeping_seconds for ${wakeupDate}:`, summary.totalSleepSeconds);
-      console.log('Records for', wakeupDate, ':', sleepByWakeupDate[wakeupDate].sleepRecords);
-      // Upsert into daily_summaries, updating only sleeping_seconds and timestamps
+    // --- NEW: Only use main sleep file for sleeping_seconds ---
+    if (typeof filename === 'string' && filename.includes('sleep-') && filename.endsWith('.json') && fileContent.dailySleepDTO) {
+      const record = fileContent.dailySleepDTO;
+      const endTimestamp = record.sleepEndTimestampLocal || record.sleepEndTimestampGMT || record.sleepEndTimestamp || null;
+      if (!endTimestamp) return;
+      const wakeupDate = new Date(endTimestamp).toISOString().split('T')[0];
+      const sleepSeconds = record.sleepTimeSeconds || 0;
+      const deviceId = record.deviceId || 'default-device-id'; // Replace with actual logic if needed
+      console.log(`[SLEEP_PROCESSOR] Upserting from main sleep file: ${filename}, date: ${wakeupDate}, sleepTimeSeconds: ${sleepSeconds}`);
       const summaryData = {
         user_id: userId,
-        device_id: '0f96861e-49b1-4aa0-b499-45267084f68c',
-        source: 'garmin',
         date: wakeupDate,
-        sleeping_seconds: summary.totalSleepSeconds,
-        extracted_at: summary.extracted_at,
+        sleeping_seconds: sleepSeconds,
+        device_id: deviceId,
+        source: 'GARMIN',
+        extracted_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       };
-      try {
-        const { error: upsertError } = await supabase
-          .from('daily_summaries')
-          .upsert(summaryData, { onConflict: 'user_id,date' });
-        if (upsertError) {
-          console.error(`${logPrefix} Error upserting daily summary (sleeping_seconds) for ${wakeupDate}:`, upsertError);
-        } else {
-          console.log(`${logPrefix} Successfully upserted daily summary (sleeping_seconds) for ${wakeupDate}`);
-        }
-      } catch (error) {
-        console.error(`${logPrefix} Error upserting daily summary (sleeping_seconds) for ${wakeupDate}:`, error);
+      const { error: upsertError } = await supabase
+        .from('daily_summaries')
+        .upsert([summaryData], { onConflict: 'user_id,date,device_id,source' });
+      if (upsertError) {
+        console.error(`[SLEEP_PROCESSOR] Error upserting daily summary (sleeping_seconds) for ${wakeupDate}:`, upsertError);
+      } else {
+        console.log(`[SLEEP_PROCESSOR] Successfully upserted daily summary (sleeping_seconds) for ${wakeupDate}`);
       }
     }
     // --- END NEW ---
@@ -667,13 +666,13 @@ async function processSteps(userId: string, fileContent: any) {
   }
 }
 
-async function processFile(userId: string, bucketName: string, filePath: string) {
+async function processFile(userId: string, bucketName: string, filename: string) {
   try {
-    console.log(`\n=== Starting to process file: ${filePath} ===`)
+    console.log(`\n=== Starting to process file: ${filename} ===`)
     
     const { data, error } = await supabase.storage
       .from(bucketName)
-      .download(filePath)
+      .download(filename)
 
     if (error) {
       console.error('Error downloading file:', error)
@@ -709,23 +708,23 @@ async function processFile(userId: string, bucketName: string, filePath: string)
       }
     }
 
-    if (filePath.includes('activities-')) {
+    if (filename.includes('activities-')) {
       console.log('\nProcessing as activities file...')
       await processActivities(userId, content)
-    } else if (filePath.includes('heart-rate-')) {
+    } else if (filename.includes('heart-rate-')) {
       console.log('\nProcessing as heart rate file...')
       await processHeartRates(userId, content)
-    } else if (filePath.includes('sleep-')) {
+    } else if (filename.includes('sleep-')) {
       console.log('\nProcessing as sleep file...')
-      await processSleep(userId, content)
-    } else if (filePath.includes('steps-')) {
+      await processSleep(userId, content, filename)
+    } else if (filename.includes('steps-')) {
       console.log('\nProcessing as steps file...')
       await processSteps(userId, content)
     } else {
-      console.warn('Unknown file type, skipping:', filePath)
+      console.warn('Unknown file type, skipping:', filename)
     }
   } catch (error) {
-    console.error(`\nError processing file ${filePath}:`, error)
+    console.error(`\nError processing file ${filename}:`, error)
     throw error
   }
 }
