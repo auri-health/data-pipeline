@@ -260,31 +260,17 @@ async function processSleep(userId: string, fileContent: any) {
       if (!sleepByWakeupDate[wakeupDate]) {
         sleepByWakeupDate[wakeupDate] = {
           totalSleepSeconds: 0,
-          deepSleepSeconds: 0,
-          lightSleepSeconds: 0,
-          remSleepSeconds: 0,
-          awakeSleepSeconds: 0,
-          napTimeSeconds: 0,
           sleepRecords: [],
-          restingHeartRate: null,
           user_id: userId,
           date: wakeupDate,
           extracted_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         };
       }
+      // Only use sleepTimeSeconds for aggregation
       sleepByWakeupDate[wakeupDate].totalSleepSeconds += record.sleepTimeSeconds || 0;
-      sleepByWakeupDate[wakeupDate].deepSleepSeconds += record.deepSleepSeconds || 0;
-      sleepByWakeupDate[wakeupDate].lightSleepSeconds += record.lightSleepSeconds || 0;
-      sleepByWakeupDate[wakeupDate].remSleepSeconds += record.remSleepSeconds || 0;
-      sleepByWakeupDate[wakeupDate].awakeSleepSeconds += record.awakeSleepSeconds || 0;
-      sleepByWakeupDate[wakeupDate].napTimeSeconds += record.napTimeSeconds || 0;
-      if (record.restingHeartRate && !sleepByWakeupDate[wakeupDate].restingHeartRate) {
-        sleepByWakeupDate[wakeupDate].restingHeartRate = record.restingHeartRate;
-      }
       sleepByWakeupDate[wakeupDate].sleepRecords.push(record);
     }
-
     // --- END NEW ---
 
     // Process in batches of 50 records
@@ -564,6 +550,8 @@ async function processSleep(userId: string, fileContent: any) {
 
     // --- NEW: Upsert daily sleep summary by wake-up date ---
     for (const [wakeupDate, summary] of Object.entries(sleepByWakeupDate)) {
+      // Debug print
+      console.log(`[DEBUG] Upserting sleeping_seconds for ${wakeupDate}:`, summary.totalSleepSeconds);
       // Upsert into daily_summaries, updating only sleeping_seconds and timestamps
       const summaryData = {
         user_id: userId,
