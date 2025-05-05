@@ -571,7 +571,7 @@ async function processSleep(userId: string, fileContent: any, filename: string) 
           date: wakeupDate,
           sleeping_seconds: sleepSeconds,
           device_id: deviceId,
-          source: 'GARMIN',
+          source: 'garmin',
           extracted_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         };
