@@ -577,7 +577,7 @@ async function processSleep(userId: string, fileContent: any, filename: string) 
         };
         const { error: upsertError } = await supabase
           .from('daily_summaries')
-          .upsert([summaryData], { onConflict: 'user_id,date,device_id,source' });
+          .upsert([summaryData], { onConflict: 'user_id,date' });
         if (upsertError) {
           console.error(`[SLEEP_PROCESSOR] Error upserting daily summary (sleeping_seconds) for ${wakeupDate}:`, upsertError);
         } else {
