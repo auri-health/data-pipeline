@@ -446,16 +446,18 @@ async function processSleep(userId: string, fileContent: any, filename: string) 
 
           // Process sleep heart rate timeseries if available
           if (record.sleepHeartRate && Array.isArray(record.sleepHeartRate)) {
-            const heartRates = record.sleepHeartRate.map((hr: any) => ({
-              user_id: userId,
-              device_id: '0f96861e-49b1-4aa0-b499-45267084f68c',
-              source: 'garmin',
-              sleep_id,
-              timestamp: new Date(hr.startGMT).toISOString(),
-              heart_rate: hr.value,
-              created_at: new Date().toISOString(),
-              updated_at: new Date().toISOString()
-            }))
+            const heartRates = record.sleepHeartRate
+              .filter((hr: any) => hr.value !== null && hr.value !== undefined)
+              .map((hr: any) => ({
+                user_id: userId,
+                device_id: '0f96861e-49b1-4aa0-b499-45267084f68c',
+                source: 'garmin',
+                sleep_id,
+                timestamp: new Date(hr.startGMT).toISOString(),
+                heart_rate: hr.value,
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString()
+              }))
             sleepHeartRatesRecords.push(...heartRates)
           }
 
@@ -557,23 +559,30 @@ async function processSleep(userId: string, fileContent: any, filename: string) 
       const wakeupDate = new Date(endTimestamp).toISOString().split('T')[0];
       const sleepSeconds = record.sleepTimeSeconds || 0;
       const deviceId = record.deviceId || 'default-device-id'; // Replace with actual logic if needed
-      console.log(`[SLEEP_PROCESSOR] Upserting from main sleep file: ${filename}, date: ${wakeupDate}, sleepTimeSeconds: ${sleepSeconds}`);
-      const summaryData = {
-        user_id: userId,
-        date: wakeupDate,
-        sleeping_seconds: sleepSeconds,
-        device_id: deviceId,
-        source: 'GARMIN',
-        extracted_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      };
-      const { error: upsertError } = await supabase
-        .from('daily_summaries')
-        .upsert([summaryData], { onConflict: 'user_id,date,device_id,source' });
-      if (upsertError) {
-        console.error(`[SLEEP_PROCESSOR] Error upserting daily summary (sleeping_seconds) for ${wakeupDate}:`, upsertError);
+      // Check for required fields
+      if (!userId || !wakeupDate || !sleepSeconds || !deviceId) {
+        console.warn(`[SLEEP_PROCESSOR] Skipping upsert for daily summary due to missing required fields:`, {
+          userId, wakeupDate, sleepSeconds, deviceId, source: 'GARMIN'
+        });
       } else {
-        console.log(`[SLEEP_PROCESSOR] Successfully upserted daily summary (sleeping_seconds) for ${wakeupDate}`);
+        console.log(`[SLEEP_PROCESSOR] Upserting from main sleep file: ${filename}, date: ${wakeupDate}, sleepTimeSeconds: ${sleepSeconds}`);
+        const summaryData = {
+          user_id: userId,
+          date: wakeupDate,
+          sleeping_seconds: sleepSeconds,
+          device_id: deviceId,
+          source: 'GARMIN',
+          extracted_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        };
+        const { error: upsertError } = await supabase
+          .from('daily_summaries')
+          .upsert([summaryData], { onConflict: 'user_id,date,device_id,source' });
+        if (upsertError) {
+          console.error(`[SLEEP_PROCESSOR] Error upserting daily summary (sleeping_seconds) for ${wakeupDate}:`, upsertError);
+        } else {
+          console.log(`[SLEEP_PROCESSOR] Successfully upserted daily summary (sleeping_seconds) for ${wakeupDate}`);
+        }
       }
     }
     // --- END NEW ---
