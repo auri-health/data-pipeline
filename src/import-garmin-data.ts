@@ -557,6 +557,7 @@ async function processSleep(userId: string, fileContent: any) {
       // Upsert into daily_summaries, updating only sleeping_seconds and timestamps
       const summaryData = {
         user_id: userId,
+        device_id: '0f96861e-49b1-4aa0-b499-45267084f68c',
         date: wakeupDate,
         sleeping_seconds: summary.totalSleepSeconds,
         extracted_at: summary.extracted_at,
