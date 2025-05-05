@@ -637,6 +637,7 @@ async function processSteps(userId: string, fileContent: any) {
       .eq('date', date)
       .single()
 
+    // Only update steps and related fields, do NOT touch sleeping_seconds
     const summaryData = {
       user_id: userId,
       device_id: '0f96861e-49b1-4aa0-b499-45267084f68c',
@@ -648,13 +649,16 @@ async function processSteps(userId: string, fileContent: any) {
       updated_at: new Date().toISOString()
     }
 
-    // If summary exists, merge with existing data
+    // If summary exists, merge with existing data, but do NOT overwrite sleeping_seconds
     if (existingSummary) {
       Object.assign(summaryData, {
         ...existingSummary,
         total_steps: steps,
         updated_at: new Date().toISOString()
       })
+      if ('sleeping_seconds' in summaryData) {
+        delete (summaryData as any).sleeping_seconds;
+      }
     }
 
     const { error } = await supabase
