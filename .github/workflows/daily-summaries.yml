@@ -3,7 +3,7 @@ name: Generate Daily Summaries
 on:
   workflow_dispatch:  # Manual trigger
   schedule:
-    - cron: '0 1 * * *'  # Run at 1 AM UTC daily
+    - cron: '0 * * * *'  # Run every hour, on the hour (UTC)
 
 jobs:
   generate-summaries:

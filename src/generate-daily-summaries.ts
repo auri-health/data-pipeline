@@ -72,7 +72,6 @@ async function generateDailySummaries(startDate: string, endDate: string) {
         highly_active_seconds: summary.highlyActiveSeconds,
         active_seconds: summary.activeSeconds,
         sedentary_seconds: summary.sedentarySeconds,
-        sleeping_seconds: summary.sleepingSeconds,
         moderate_intensity_minutes: summary.moderateIntensityMinutes,
         vigorous_intensity_minutes: summary.vigorousIntensityMinutes,
         min_heart_rate: summary.minHeartRate,
