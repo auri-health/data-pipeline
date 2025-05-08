@@ -577,6 +577,9 @@ async function processSleep(userId: string, fileContent: any, filename: string) 
           source: 'garmin',
           extracted_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
+          // Add sleep_start_time and sleep_end_time if present
+          ...(record.sleepStartTimestampLocal ? { sleep_start_time: new Date(record.sleepStartTimestampLocal).toISOString() } : {}),
+          ...(record.sleepEndTimestampLocal ? { sleep_end_time: new Date(record.sleepEndTimestampLocal).toISOString() } : {}),
         };
         const { error: upsertError } = await supabase
           .from('daily_summaries')
