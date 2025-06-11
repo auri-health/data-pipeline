@@ -3,7 +3,7 @@ name: Import Garmin Data
 on:
   workflow_dispatch:  # Manual trigger
   schedule:
-    - cron: '0 * * * *'  # Run every hour, on the hour (UTC)
+    - cron: '15 11 * * *'  # Run every day at 8:15am BRT (11:15 UTC)
 
 jobs:
   import-garmin-data:
